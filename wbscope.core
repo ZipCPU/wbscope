@@ -1,0 +1,15 @@
+CAPI=1
+[main]
+description = "Pipelined Wishbone to AXI converter"
+
+[verilog]
+src_files =
+  rtl/wbscope.v
+  rtl/wbscopc.v
+
+[provider]
+name=github
+user=ZipCPU
+repo=wbscope
+version = master
+cachable = true
