@@ -11,6 +11,7 @@ before stopping.  Values may then be read from the buffer, oldest to most
 recent.  After reading, the scope may then be reset for another run.
 
 In general, therefore, operation happens in this fashion:
+
 1. A reset is issued.
 2. Recording starts, in a circular buffer, and continues until
 3. The trigger line is asserted.
@@ -19,7 +20,9 @@ In general, therefore, operation happens in this fashion:
   The scope registers that it has stopped recording by setting the ``o_stopped`` output flag.
 5. The scope recording is then paused until the next reset.
 6. While stopped, the CPU can read the data from the scope
-7. -- oldest to most recent
-8. -- one value per bus clock
-9. Writes to the data register reset the address to the beginning of the buffer
+
+  - oldest to most recent
+  - one value per bus clock
+  
+7. Writes to the data register reset the address to the beginning of the buffer
 
