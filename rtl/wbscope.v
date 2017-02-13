@@ -1,8 +1,8 @@
-///////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	wbscope.v
 //
-// Project:	FPGA Library of Routines
+// Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	This is a generic/library routine for providing a bus accessed
 //	'scope' or (perhaps more appropriately) a bus accessed logic analyzer.
@@ -57,9 +57,9 @@
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
 //
-///////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2015, Gisselquist Technology, LLC
+// Copyright (C) 2015-2017, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -72,7 +72,7 @@
 // for more details.
 //
 // You should have received a copy of the GNU General Public License along
-// with this program.  (It's in the $(ROOT)/doc directory, run make with no
+// with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
 //
@@ -80,12 +80,15 @@
 //		http://www.gnu.org/licenses/gpl.html
 //
 //
-/////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+//
+//
 module wbscope(i_clk, i_ce, i_trigger, i_data,
 	i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 	o_wb_ack, o_wb_stall, o_wb_data,
 	o_interrupt);
-	parameter	LGMEM = 5'd10, BUSW = 32, SYNCHRONOUS=1;
+	parameter	LGMEM = 5'd10, BUSW = 32, SYNCHRONOUS=1,
+			DEFAULT_HOLDOFF = ((1<<(LGMEM-1))-4);
 	// The input signals that we wish to record
 	input				i_clk, i_ce, i_trigger;
 	input		[(BUSW-1):0]	i_data;
@@ -108,7 +111,7 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 			bw_disable_trigger, bw_reset_complete;
 	reg	[22:0]	br_config;
 	wire	[19:0]	bw_holdoff;
-	initial	br_config = ((1<<(LGMEM-1))-4);
+	initial	br_config = DEFAULT_HOLDOFF;
 	always @(posedge i_wb_clk)
 		if ((i_wb_cyc)&&(i_wb_stb)&&(~i_wb_addr))
 		begin
@@ -134,7 +137,8 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 		assign	bw_reset_complete = bw_reset_request;
 	end else begin
 		reg		r_reset_complete;
-		reg	[2:0]	r_iflags, q_iflags;
+		(* ASYNC_REG = "TRUE" *) reg	[2:0]	q_iflags;
+		reg	[2:0]	r_iflags;
 
 		// Resets are synchronous to the bus clock, not the data clock
 		// so do a clock transfer here
@@ -151,7 +155,8 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 		assign	dw_manual_trigger = r_iflags[1];
 		assign	dw_disable_trigger = r_iflags[0];
 
-		reg	q_reset_complete, qq_reset_complete;
+		(* ASYNC_REG = "TRUE" *) reg	q_reset_complete;
+		reg	qq_reset_complete;
 		// Pass an acknowledgement back from the data clock to the bus
 		// clock that the reset has been accomplished
 		initial	q_reset_complete = 1'b0;
@@ -251,7 +256,8 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 		// for many clocks.  Swapping is thus easy--two flip flops to
 		// protect against meta-stability and we're done.
 		//
-		reg	[2:0]	q_oflags, r_oflags;
+		(* ASYNC_REG = "TRUE" *) reg	[2:0]	q_oflags;
+		reg	[2:0]	r_oflags;
 		initial	q_oflags = 3'h0;
 		initial	r_oflags = 3'h0;
 		always @(posedge i_wb_clk)
