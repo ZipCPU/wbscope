@@ -26,3 +26,7 @@ In general, therefore, operation happens in this fashion:
   
 7. Writes to the data register reset the address to the beginning of the buffer
 
+# Commercial Applications
+
+Should you find the GPLv3 license insufficient for your needs, other licenses
+can be purchased from Gisselquist Technology, LLC.
