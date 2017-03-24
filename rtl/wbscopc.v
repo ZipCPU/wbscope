@@ -113,7 +113,7 @@ module wbscopc(i_clk, i_ce, i_trigger, i_data,
 	// When is the full scope reset?  Capture that reset bit from any
 	// write.
 	wire	lcl_reset;
-	assign	lcl_reset = (i_wb_cyc)&&(i_wb_stb)&&(~i_wb_addr)&&(i_wb_we)
+	assign	lcl_reset = (i_wb_stb)&&(~i_wb_addr)&&(i_wb_we)
 				&&(~i_wb_data[31]);
 
 	// A big part of this scope is the 'address' of any particular
