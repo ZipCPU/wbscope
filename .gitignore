@@ -1,0 +1,6 @@
+obj_dir
+legal.txt
+*.o
+*.vcd
+*_tb
+.svn/

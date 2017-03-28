@@ -1,31 +1,30 @@
-///////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	cfgscope.cpp
 //
-// Project:	FPGA library development (Basys-3 development board)
+// Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	To read out, and decompose, the results of the wishbone scope
 //		as applied to the ICAPE2 interaction.
 //
-//		This is provided together with the wbscope project as an
-//		example of what might be done with the wishbone scope.
-//		The intermediate details, though, between this and the
-//		wishbone scope are not part of the wishbone scope project.
+//	This is provided together with the wbscope project as an example of
+//	what might be done with the wishbone scope.  The intermediate details,
+//	though, between this and the wishbone scope are not part of the
+//	wishbone scope project.
 //
-//		Using this particular scope made it a *lot* easier to get the
-//		ICAPE2 interface up and running, since I was able to see what
-//		was going right (or wrong) with the interface as I was 
-//		developing it.  Sure, it would've been better to get it to work
-//		under a simulator instead of with the scope, but not being
-//		certain of how the interface was supposed to work made building
-//		a simulator difficult.
+//	Using this particular scope made it a *lot* easier to get the ICAPE2
+//	interface up and running, since I was able to see what was going right
+//	(or wrong) with the interface as I was developing it.  Sure, it
+//	would've been better to get it to work under a simulator instead of
+//	with the scope, but not being certain of how the interface was
+//	supposed to work made building a simulator difficult.
 //
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
 //
-///////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2015, Gisselquist Technology, LLC
+// Copyright (C) 2015-2017, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -38,7 +37,7 @@
 // for more details.
 //
 // You should have received a copy of the GNU General Public License along
-// with this program.  (It's in the $(ROOT)/doc directory, run make with no
+// with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
 //
@@ -46,98 +45,53 @@
 //		http://www.gnu.org/licenses/gpl.html
 //
 //
-///////////////////////////////////////////////////////////////////////////
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <strings.h>
-#include <ctype.h>
-#include <string.h>
-#include <signal.h>
-#include <assert.h>
-
-#include "port.h"
-#include "llcomms.h"	// This defines how we talk to the device over wishbone
-#include "regdefs.h"
-
-// Here are the two registers needed for accessing our scope: A control register
-// and a data register.  
-#define	WBSCOPE		R_CFGSCOPE
-#define	WBSCOPEDATA	R_CFGSCOPED
+////////////////////////////////////////////////////////////////////////////////
+//
+//
+#include "devbus.h"
+#include "scopecls.h"
 
 //
-// The DEVBUS structure encapsulates wishbone accesses, so that this code can
-// access the wishbone bus on the FPGA.
-DEVBUS	*m_fpga;
-void	closeup(int v) {
-	m_fpga->kill();
-	exit(0);
-}
+// CFGSCOPE
+//
+// When you wish to build your own scope, you'll need to build a version of this
+// class to do so.  This class has two particular functions to it: one
+// (optional) one to define the traces used incase we wish to split these apart
+// for output to a VCD file.  The other function is for use with debug-by-printf
+// approaches.  As a result, it provides for a more flexible (textual) output.
+//
+class	CFGSCOPE : public SCOPE {
 
-int main(int argc, char **argv) {
-	// Open up a port to talk to the FPGA ...
-#ifndef	FORCE_UART
-	m_fpga = new FPGA(new NETCOMMS("lazarus",PORT));
-#else
-	m_fpga = new FPGA(new TTYCOMMS("/dev/ttyUSB2"));
-#endif
-
-	signal(SIGSTOP, closeup);
-	signal(SIGHUP, closeup);
-
-	// Check to see whether or not the scope has captured the data we need
-	// yet or not.  If not, exit kindly.
-	unsigned	v, lgln, scoplen;
-	v = m_fpga->readio(WBSCOPE);
-	if (0x60000000 != (v & 0x60000000)) {
-		printf("Scope is not yet ready:\n");
-		printf("\tRESET:\t\t%s\n", (v&0x80000000)?"Ongoing":"Complete");
-		printf("\tSTOPPED:\t%s\n", (v&0x40000000)?"Yes":"No");
-		printf("\tTRIGGERED:\t%s\n", (v&0x20000000)?"Yes":"No");
-		printf("\tPRIMED:\t\t%s\n", (v&0x10000000)?"Yes":"No");
-		printf("\tMANUAL:\t\t%s\n", (v&0x08000000)?"Yes":"No");
-		printf("\tDISABLED:\t%s\n", (v&0x04000000)?"Yes":"No");
-		printf("\tZERO:\t\t%s\n", (v&0x02000000)?"Yes":"No");
-		exit(0);
+	virtual	void	define_traces(void) {
+		// Heres the interface for VCD files: We need to tell the VCD
+		// writer the names of all of our traces, how many bits each
+		// trace uses, and where the location of the value exists within
+		// the 32-bit trace word.
+		register_trace("cs_n",   1, 31);
+		register_trace("we_n",   1, 30);
+		register_trace("code",   6, 24);
+		register_trace("value", 24,  0);
 	}
 
-	// Since the length of the scope memory is a configuration parameter
-	// internal to the scope, we read it here to find out how it was
-	// configured.
-	lgln = (v>>20) & 0x1f;
-	scoplen = (1<<lgln);
+	//
+	// decode
+	//
+	// Decode the value to the standard-output stream.  How you decode this
+	// value is up to you.  Prior to the value being printed, a prefix
+	// identifying the clock number (as counted by the scope, with the
+	// internal clock enable on), and the raw value will be printed out.
+	// Further, after doing whatever printing you wish to do here, a newline
+	// will be printed before going to the next value.
+	//
+	virtual	void	decode(DEVBUS::BUSW v) const {
+		// Now, let's decompose our 32-bit wires into something ...
+		// meaningful and dump it to stdout.  This section will change
+		// from project to project, scope to scope, depending on what
+		// wires are placed into the scope.
+		printf("%s %s ", (v&0x80000000)?"  ":"CS",
+			 	(v&0x40000000)?"RD":"WR");
 
-	DEVBUS::BUSW	*buf;
-	buf = new DEVBUS::BUSW[scoplen];
-
-	// There are two means of reading from a DEVBUS interface: The first
-	// is a vector read, optimized so that the address and read command
-	// only needs to be sent once.  This is the optimal means.  However,
-	// if the bus isn't (yet) trustworthy, it may be more reliable to access
-	// the port by reading one register at a time--hence the second method.
-	// If the bus works, you'll want to use readz(): read scoplen values
-	// into the buffer, from the address WBSCOPEDATA, without incrementing
-	// the address each time (hence the 'z' in readz--for zero increment).
-	if (true) {
-		m_fpga->readz(WBSCOPEDATA, scoplen, buf);
-
-		printf("Vector read complete\n");
-	} else {
-		for(int i=0; i<scoplen; i++)
-			buf[i] = m_fpga->readio(WBSCOPEDATA);
-	}
-
-	// Now, let's decompose our 32-bit wires into something ... meaningful.
-	// This section will change from project to project, scope to scope,
-	// depending on what wires are placed into the scope.
-	for(int i=0; i<scoplen; i++) {
-		if ((i>0)&&(buf[i] == buf[i-1])&&
-				(i<scoplen-1)&&(buf[i] == buf[i+1]))
-			continue;
-		printf("%6d %08x:", i, buf[i]);
-		printf("%s %s ", (buf[i]&0x80000000)?"  ":"CS",
-				 (buf[i]&0x40000000)?"RD":"WR");
-		unsigned cw = (buf[i]>>24)&0x03f;
+		unsigned cw = (v>>24)&0x03f;
 		switch(cw) {
 			case	0x20: printf("DUMMY"); break;
 			case	0x10: printf("NOOP "); break;
@@ -147,10 +101,48 @@ int main(int argc, char **argv) {
 			case	0x01: printf("DSYNC"); break;
 			default:      printf("OTHER"); break;
 		}
-		printf(" -> %02x\n", buf[i] & 0x0ffffff);
+		printf(" -> %02x", v & 0x0ffffff);
+	}
+};
+
+int main(int argc, char **argv) {
+	// The DEVBUS structure encapsulates wishbone accesses, so that this
+	// code can access the wishbone bus on the FPGA.
+	DEVBUS	*m_fpga;
+
+	// Open up a port to talk to the FPGA ...
+	//
+	// This may be unique to your FPGA, so feel free to adjust these lines
+	// for your setup.  The result, though, must be a DEVBUS structure
+	// giving you access to the FPGA.
+#ifndef	FORCE_UART
+	m_fpga = new FPGA(new NETCOMMS("lazarus",PORT));
+#else
+	m_fpga = new FPGA(new TTYCOMMS("/dev/ttyUSB2"));
+#endif
+
+	// 
+	CFGSCOPE *scope = new CFGSCOPE(m_fpga, WBSCOPE);
+
+	// Check to see whether or not the scope has captured the data we need
+	// yet or not.
+	if (scope->ready()) {
+		// If the data has been captured, we call print().  This
+		// function will print all our values to the standard output,
+		// and it will call the decode() function above to do it.
+		scope->print();
+
+		// You can also write the results to a VCD trace file.  To do
+		// this, just call writevcd and pass it the name you wish your
+		// VCD file to have.
+		scope->writevcd("cfgtrace.vcd");
+	} else {
+		// If the scope isnt yet ready, print a message, decode its
+		// current state, and exit kindly.
+		printf("Scope is not (yet) ready:\n");
+		scope->decode_control();
 	}
 
 	// Clean up our interface, now, and we're done.
 	delete	m_fpga;
 }
-

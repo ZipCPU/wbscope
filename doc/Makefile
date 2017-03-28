@@ -15,6 +15,6 @@ spec.pdf: $(DSRC)/spec.tex $(DSRC)/gqtekspec.cls
 	ps2pdf -dAutoRotatePages=/All spec.ps spec.pdf
 	rm $(DSRC)/spec.dvi $(DSRC)/spec.log
 	rm $(DSRC)/spec.aux $(DSRC)/spec.toc
-	rm $(DSRC)/spec.lot #  $(DSRC)/spec.lof
+	rm $(DSRC)/spec.lot $(DSRC)/spec.out
 	rm spec.ps
 
