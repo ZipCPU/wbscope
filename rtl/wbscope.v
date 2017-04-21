@@ -83,6 +83,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
+`default_nettype	none
+//
 module wbscope(i_clk, i_ce, i_trigger, i_data,
 	i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 	o_wb_ack, o_wb_stall, o_wb_data,
@@ -93,12 +95,12 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 	parameter		 	HOLDOFFBITS = 20;
 	parameter [(HOLDOFFBITS-1):0]	DEFAULT_HOLDOFF = ((1<<(LGMEM-1))-4);
 	// The input signals that we wish to record
-	input				i_clk, i_ce, i_trigger;
-	input		[(BUSW-1):0]	i_data;
+	input	wire			i_clk, i_ce, i_trigger;
+	input	wire	[(BUSW-1):0]	i_data;
 	// The WISHBONE bus for reading and configuring this scope
-	input				i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we;
-	input				i_wb_addr; // One address line only
-	input		[(BUSW-1):0]	i_wb_data;
+	input	wire			i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we;
+	input	wire			i_wb_addr; // One address line only
+	input	wire	[(BUSW-1):0]	i_wb_data;
 	output	wire			o_wb_ack, o_wb_stall;
 	output	reg	[(BUSW-1):0]	o_wb_data;
 	// And, finally, for a final flair --- offer to interrupt the CPU after
@@ -215,7 +217,7 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 	always @(posedge i_clk)
 		if ((!dr_triggered)||(dw_reset))
 			dr_stopped <= 1'b0;
-		else
+		else // if (i_ce)
 			dr_stopped <= (counter >= br_holdoff);
 
 	//

@@ -87,18 +87,20 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
+`default_nettype	none
+//
 module wbscopc(i_clk, i_ce, i_trigger, i_data,
 	i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 	o_wb_ack, o_wb_stall, o_wb_data,
 	o_interrupt);
 	parameter	LGMEM = 5'd10, NELM=31, BUSW = 32, SYNCHRONOUS=1;
 	// The input signals that we wish to record
-	input				i_clk, i_ce, i_trigger;
-	input		[(NELM-1):0]	i_data;
+	input	wire			i_clk, i_ce, i_trigger;
+	input	wire	[(NELM-1):0]	i_data;
 	// The WISHBONE bus for reading and configuring this scope
-	input				i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we;
-	input				i_wb_addr; // One address line only
-	input		[(BUSW-1):0]	i_wb_data;
+	input	wire			i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we;
+	input	wire			i_wb_addr; // One address line only
+	input	wire	[(BUSW-1):0]	i_wb_data;
 	output	wire			o_wb_ack, o_wb_stall;
 	output	wire	[(BUSW-1):0]	o_wb_data;
 	// And, finally, for a final flair --- offer to interrupt the CPU after
