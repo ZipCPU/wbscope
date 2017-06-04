@@ -1,15 +1,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename: 	wbscope_tb.v
+// Filename: 	wbscopc_tb.v
 //
 // Project:	WBScope, a wishbone hosted scope
 //
-// Purpose:	This file is a test bench wrapper around the wishbone scope,
-//		designed to create a "signal" which can then be scoped and
-//	proven.  In our case here, the "signal" is a counter.  When we test
-//	the scope within our bench/cpp Verilator testbench, we'll know if our
-//	test was "correct" if the counter 1) only ever counts by 1, and 2) if
-//	the trigger lands on thte right data sample.
+// Purpose:	This file is a test bench wrapper around the compressed
+//		wishbone scope, designed to create a "signal" which can then
+//	be scoped and proven.  Unlike the case of the normal wishbone scope,
+//	this scope needs a test signal that has lots of idle time surrounded
+//	my sudden changes.  We'll handle our sudden changes via a counter.
 //
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
@@ -43,9 +42,9 @@
 module	wbscope_tb(i_clk,
 		// i_rst is required by our test infrastructure, yet unused here
 		i_rst,
-		// The test data.  o_data is internally generated here from a
-		// counter, i_trigger is given externally
-		i_trigger, o_data,
+		// The test data.  o_data is internally generated here from
+		// o_counter, i_trigger is given externally
+		i_trigger, o_data, o_counter,
 		// Wishbone bus interaction
 		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 		//	wishbone bus outputs
@@ -53,29 +52,35 @@ module	wbscope_tb(i_clk,
 		// And our output interrupt
 		o_interrupt);
 	input			i_clk, i_rst, i_trigger;
-	output	wire	[31:0]	o_data;
+	output	wire	[30:0]	o_data;
+	output	wire	[29:0]	o_counter;
 	//
 	input			i_wb_cyc, i_wb_stb, i_wb_we;
 	input			i_wb_addr;
 	input		[31:0]	i_wb_data;
 	//
 	output	wire		o_wb_ack;
-	output	wire		o_wb_stall;
 	output	wire	[31:0]	o_wb_data;
+	output	wire		o_wb_stall;
 	//
 	output	o_interrupt;
 
-	reg	[30:0]	counter;
+	reg	[29:0]	counter;
 	initial	counter = 0;
 	always @(posedge i_clk)
 		counter <= counter + 1'b1;
-
-	assign	o_data = { i_trigger, counter };
+	always @(posedge i_clk)
+		if (counter[11:8] == 4'h0)
+			o_data <= { i_trigger, counter };
+		else if ((counter[10])&&(counter[1]))
+			o_data <= { i_trigger, counter };
+		else
+			o_data <= { i_trigger, counter[29:12], 12'h0 };
 
 	wire	wb_stall_ignored;
 
-	wbscope	#(.LGMEM(5'd6), .BUSW(32), .SYNCHRONOUS(1),
-			.DEFAULT_HOLDOFF(1))
+	wbscopc	#(.LGMEM(5'd14), .BUSW(32), .SYNCHRONOUS(1), .MAX_STEP(768),
+			.DEFAULT_HOLDOFF(36))
 		scope(i_clk, 1'b1, i_trigger, o_data,
 			i_clk, i_wb_cyc, i_wb_stb, i_wb_we,
 					i_wb_addr, i_wb_data,
@@ -83,4 +88,5 @@ module	wbscope_tb(i_clk,
 			o_interrupt);
 
 	assign	o_wb_stall = 1'b0;
+
 endmodule

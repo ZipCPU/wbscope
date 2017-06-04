@@ -27,7 +27,7 @@
 //		5. The scope recording is then paused until the next reset.
 //		6. While stopped, the CPU can read the data from the scope
 //		7. -- oldest to most recent
-//		8. -- one value per i_rd&i_clk
+//		8. -- one value per i_rd&i_data_clk
 //		9. Writes to the data register reset the address to the
 //			beginning of the buffer
 //
@@ -85,7 +85,7 @@
 //
 `default_nettype	none
 //
-module wbscope(i_clk, i_ce, i_trigger, i_data,
+module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
 	o_wb_ack, o_wb_stall, o_wb_data,
 	o_interrupt);
@@ -95,7 +95,7 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 	parameter		 	HOLDOFFBITS = 20;
 	parameter [(HOLDOFFBITS-1):0]	DEFAULT_HOLDOFF = ((1<<(LGMEM-1))-4);
 	// The input signals that we wish to record
-	input	wire			i_clk, i_ce, i_trigger;
+	input	wire			i_data_clk, i_ce, i_trigger;
 	input	wire	[(BUSW-1):0]	i_data;
 	// The WISHBONE bus for reading and configuring this scope
 	input	wire			i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we;
@@ -151,7 +151,7 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 		// so do a clock transfer here
 		initial	q_iflags = 3'b000;
 		initial	r_reset_complete = 1'b0;
-		always @(posedge i_clk)
+		always @(posedge i_data_clk)
 		begin
 			q_iflags <= { bw_reset_request, bw_manual_trigger, bw_disable_trigger };
 			r_iflags <= q_iflags;
@@ -189,7 +189,7 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 				((i_trigger)&&(!dw_disable_trigger))
 				||(dw_manual_trigger));
 	initial	dr_triggered = 1'b0;
-	always @(posedge i_clk)
+	always @(posedge i_data_clk)
 		if (dw_reset)
 			dr_triggered <= 1'b0;
 		else if ((i_ce)&&(dw_trigger))
@@ -205,20 +205,20 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 	reg		dr_stopped;
 	initial	dr_stopped = 1'b0;
 	initial	counter = 0;
-	always @(posedge i_clk)
+	always @(posedge i_data_clk)
 		if (dw_reset)
 			counter <= 0;
 		else if ((i_ce)&&(dr_triggered)&&(!dr_stopped))
-		begin // MUST BE a < and not <=, so that we can keep this w/in
-			// 20 bits.  Else we'd need to add a bit to comparison 
-			// here.
+		begin
 			counter <= counter + 1'b1;
 		end
-	always @(posedge i_clk)
+	always @(posedge i_data_clk)
 		if ((!dr_triggered)||(dw_reset))
 			dr_stopped <= 1'b0;
-		else // if (i_ce)
+		else if (HOLDOFFBITS > 1) // if (i_ce)
 			dr_stopped <= (counter >= br_holdoff);
+		else if (HOLDOFFBITS <= 1)
+			dr_stopped <= ((i_ce)&&(dw_trigger));
 
 	//
 	//	Actually do our writes to memory.  Record, via 'primed' when
@@ -233,7 +233,7 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 	reg	[(LGMEM-1):0]	waddr;
 	initial	waddr = {(LGMEM){1'b0}};
 	initial	dr_primed = 1'b0;
-	always @(posedge i_clk)
+	always @(posedge i_data_clk)
 		if (dw_reset) // For simulation purposes, supply a valid value
 		begin
 			waddr <= 0; // upon reset.
@@ -242,11 +242,46 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 		begin
 			// mem[waddr] <= i_data;
 			waddr <= waddr + {{(LGMEM-1){1'b0}},1'b1};
-			dr_primed <= (dr_primed)||(&waddr);
+			if (!dr_primed)
+			begin
+				//if (br_holdoff[(HOLDOFFBITS-1):LGMEM]==0)
+				//	dr_primed <= (waddr >= br_holdoff[(LGMEM-1):0]);
+				// else
+				
+					dr_primed <= (&waddr);
+			end
 		end
-	always @(posedge i_clk)
+
+	// Delay the incoming data so that we can get our trigger to align
+	// with the data
+	localparam	STOPDELAY = 1;
+	wire	[(BUSW-1):0]		wr_piped_data;
+	generate
+	if (STOPDELAY == 0)
+		// No delay ... just assign the wires to our input lines
+		assign	wr_piped_data = i_data;
+	else if (STOPDELAY == 1)
+	begin
+		//
+		// Delay by one means just register this once
+		reg	[(BUSW-1):0]	data_pipe;
+		always @(posedge i_data_clk)
+			if (i_ce)
+				data_pipe <= i_data;
+		assign	wr_piped_data = data_pipe;
+	end else begin
+		// Arbitrary delay ... use a longer pipe
+		reg	[(STOPDELAY*BUSW-1):0]	data_pipe;
+
+		always @(posedge i_data_clk)
+			if (i_ce)
+				data_pipe <= { data_pipe[((STOPDELAY-1)*BUSW-1):0], i_data };
+		assign	wr_piped_data = { data_pipe[(STOPDELAY*BUSW-1):((STOPDELAY-1)*BUSW)] };
+	end endgenerate
+
+	always @(posedge i_data_clk)
 		if ((i_ce)&&(!dr_stopped))
-			mem[waddr] <= i_data;
+			mem[waddr] <= wr_piped_data;
 
 	//
 	// Clock transfer of the status signals
@@ -284,10 +319,12 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 	end endgenerate
 
 	// Reads use the bus clock
-	reg	br_wb_ack;
+	reg	br_wb_ack, br_pre_wb_ack;
 	initial	br_wb_ack = 1'b0;
 	wire	bw_cyc_stb;
 	assign	bw_cyc_stb = (i_wb_stb);
+	initial	br_pre_wb_ack = 1'b0;
+	initial	br_wb_ack = 1'b0;
 	always @(posedge i_wb_clk)
 	begin
 		if ((bw_reset_request)
@@ -296,21 +333,20 @@ module wbscope(i_clk, i_ce, i_trigger, i_data,
 		else if ((bw_cyc_stb)&&(i_wb_addr)&&(!i_wb_we)&&(bw_stopped))
 			raddr <= raddr + 1'b1; // Data read, when stopped
 
-		if ((bw_cyc_stb)&&(!i_wb_we))
-		begin // Read from the bus
-			br_wb_ack <= 1'b1;
-		end else if ((bw_cyc_stb)&&(i_wb_we))
-			// We did this write above
-			br_wb_ack <= 1'b1;
-		else // Do nothing if either i_wb_cyc or i_wb_stb are low
-			br_wb_ack <= 1'b0;
+		br_pre_wb_ack <= bw_cyc_stb;
+		br_wb_ack <= (br_pre_wb_ack)&&(i_wb_cyc);
 	end
+
+	reg	[(LGMEM-1):0]	this_addr;
+	always @(posedge i_wb_clk)
+		if ((bw_cyc_stb)&&(i_wb_addr)&&(!i_wb_we))
+			this_addr <= raddr + waddr + 1'b1;
+		else
+			this_addr <= raddr + waddr;
 
 	reg	[31:0]	nxt_mem;
 	always @(posedge i_wb_clk)
-		nxt_mem <= mem[raddr+waddr+
-			(((bw_cyc_stb)&&(i_wb_addr)&&(!i_wb_we)) ?
-				{{(LGMEM-1){1'b0}},1'b1} : { (LGMEM){1'b0}} )];
+		nxt_mem <= mem[this_addr];
 
 	wire	[19:0]	full_holdoff;
 	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;

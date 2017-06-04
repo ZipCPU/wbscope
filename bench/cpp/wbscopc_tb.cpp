@@ -1,10 +1,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename:	wbscope_tb.cpp
+// Filename:	wbscopc_tb.cpp
 //
 // Project:	WBScope, a wishbone hosted scope
 //
-// Purpose:	A quick test bench to determine if the wbscope module works.
+// Purpose:	A quick test bench to determine if the run-length encoded
+//		wbscopc module works.
 //
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
@@ -41,21 +42,21 @@
 #include <verilated_vcd_c.h>
 #include "testb.h"
 #include "wb_tb.h"
-#include "Vwbscope_tb.h"
+#include "Vwbscopc_tb.h"
 
-const int	LGMEMSIZE = 15;
+const int LGMEMSIZE = 15;
 
-class	WBSCOPE_TB : public WB_TB<Vwbscope_tb> {
+class	WBSCOPC_TB : public WB_TB<Vwbscopc_tb> {
 	bool		m_bomb, m_debug;
 public:
 
-	WBSCOPE_TB(void) {
+	WBSCOPC_TB(void) {
 		m_debug = true;
 	}
 
 	void	tick(void) {
 
-		TESTB<Vwbscope_tb>::tick();
+		WB_TB<Vwbscopc_tb>::tick();
 
 		bool	writeout = true;
 		if ((m_debug)&&(writeout)) {}
@@ -73,6 +74,7 @@ public:
 		m_core->i_trigger = 1;
 		wb_tick();
 		m_core->i_trigger = 0;
+		printf("TRIGGERED AT %08x\n", m_core->o_data);
 		return m_core->o_data;
 	}
 
@@ -82,13 +84,12 @@ public:
 
 int main(int  argc, char **argv) {
 	Verilated::commandArgs(argc, argv);
-	WBSCOPE_TB	*tb = new WBSCOPE_TB;
-	unsigned	v;
+	WBSCOPC_TB	*tb = new WBSCOPC_TB;
+	unsigned	v, addr, trigger_addr;
 	unsigned *buf;
 	int	trigpt;
-	unsigned	trigger_time, expected_first_value;
 
-	tb->opentrace("wbscope_tb.vcd");
+	tb->opentrace("wbscopc_tb.vcd");
 	printf("Giving the core 2 cycles to start up\n");
 	// Before testing, let's give the unit time enough to warm up
 	tb->reset();
@@ -119,7 +120,12 @@ int main(int  argc, char **argv) {
 	}
 	buf = new unsigned[(1<<ln)];
 
+	for(int i=0; i<(1<<(12+4)); i++)
+		tb->wb_tick();
 	for(int i=0; i<(1<<ln); i++)
+		tb->wb_tick();
+
+	for(int i=0; i<240; i++)
 		tb->wb_tick();
 
 	v = tb->wb_read(WBSCOPE_STATUS);
@@ -129,9 +135,7 @@ int main(int  argc, char **argv) {
 		goto test_failure;
 	}
 
-	trigger_time = tb->trigger() & 0x7fffffff;
-	printf("TRIGGERED AT %08x\n", trigger_time);
-
+	tb->trigger();
 	v = tb->wb_read(WBSCOPE_STATUS);
 	if ((v&WBSCOPE_TRIGGERED)==0) {
 		printf("v = %08x\n", v);
@@ -144,32 +148,42 @@ int main(int  argc, char **argv) {
 	printf("SCOPE has stopped, reading data\n");
 
 	tb->wb_read(WBSCOPE_DATA, (1<<ln), buf, 0);
+	addr = 0;
+	trigger_addr = 0xffffffff;
 	for(int i=0; i<(1<<ln); i++) {
-		printf("%4d: %08x\n", i, buf[i]);
-		if ((i>0)&&(((buf[i]&0x7fffffff)-(buf[i-1]&0x7fffffff))!=1)) {
-			printf("ERR: Scope data doesn't increment!\n");
-			printf("\tIn other words--its not matching the test signal\n");
-			goto test_failure;
+		if (buf[i] & 0x80000000)
+			addr += (buf[i]&0x7fffffff) + 1;
+		else {
+			if ((i > 0)&&(buf[i-1]&0x80000000))
+				printf("     [*****]:\n");
+			printf("%5d[%5d]: %08x", addr, i, buf[i]);
+			if (buf[i] & 0x40000000) {
+				printf(" <<--- TRIGGER!");
+				trigger_addr = addr;
+			} printf("\n");
+
+			addr++;
 		}
+	} if ((buf[(1<<ln)-1]&0x80000000))
+		printf("     [*****]:\n");
+
+	if (buf[(1<<ln)-1] & 0x80000000) {
+		printf("ERR: LAST VALUE IS A RUN, 0x%08x\n", buf[(1<<ln)-1]);
+		goto test_failure;
 	}
 
-	trigpt = (1<<ln)-v&(0x0fffff)-1;
-	if ((trigpt >= 0)&&(trigpt < (1<<ln))) {
-		printf("Trigger value = %08x\n", buf[trigpt]);
-		if (((0x80000000 & buf[trigpt])==0)&&(trigpt>0)) {
-			printf("Pre-Trigger value = %08x\n", buf[trigpt-1]);
-			if ((buf[trigpt-1]&0x80000000)==0) {
-				printf("TRIGGER NOT FOUND\n");
-				goto test_failure;
-			}
-		}
+	if (trigger_addr == 0xffffffff) {
+		printf("ERR: TRIGGER NOT FOUND IN THE DATA!\n");
+		goto test_failure;
 	}
 
-	expected_first_value = trigger_time + (v&0x0fffff) - (1<<ln);
-	if (buf[0] != expected_first_value) {
-		printf("Initial value = %08x\n", buf[0]);
-		printf("Expected:     %08x\n", expected_first_value);
-		printf("ERR: WRONG STARTING-VALUE\n");
+	
+	printf("TRIGGER ADDRESS = %08x (%5d)\n", trigger_addr, trigger_addr);
+	printf("V               = %08x\n", v & 0x0fffff);
+	printf("Difference      = %08x (%5d)\n", addr - trigger_addr,
+			addr - trigger_addr);
+	if (addr - 1 - trigger_addr != (v & 0x0fffff)) {
+		printf("TRIGGER AT THE WRONG LOCATION!\n");
 		goto test_failure;
 	}
 

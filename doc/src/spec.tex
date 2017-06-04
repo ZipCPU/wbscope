@@ -19,7 +19,7 @@
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
-%% Copyright (C) 2015, Gisselquist Technology, LLC
+%% Copyright (C) 2015,2017, Gisselquist Technology, LLC
 %%
 %% This program is free software (firmware): you can redistribute it and/or
 %% modify it under the terms of  the GNU General Public License as published
@@ -46,7 +46,7 @@
 \title{Specification}
 \author{Dan Gisselquist, Ph.D.}
 \email{dgisselq (at) ieee.org}
-\revision{Rev.~0.1}
+\revision{Rev.~0.4}
 \begin{document}
 \pagestyle{gqtekspecplain}
 \titlepage
@@ -68,6 +68,7 @@ with this program.  If not, see \texttt{http://www.gnu.org/licenses/} for a
 copy.
 \end{license}
 \begin{revisionhistory}
+0.4 & 6/2/2017 & Gisselquist & Added Compressed scope and TB's\\\hline
 0.3 & 6/22/2015 & Gisselquist & Minor updates to enhance readability \\\hline
 0.2 & 6/22/2015 & Gisselquist & Finished Draft \\\hline
 0.1 & 6/22/2015 & Gisselquist & First Draft \\\hline
@@ -90,12 +91,13 @@ manually stepped approach, I generated a scope like this one.  I had already
 bench tested the components on the hardware itself.  Thus, testing and 
 development continued on the hardware, and the scope helped me see what was
 going right or wrong.  The great advantage of the approach was that, at the
-end of the project, I didn't need to do any hardware in the loop testing.
-All of the testing that had been accomplished prior to that date was already
-hardware in the loop testing.
+end of the project, I didn't need to switch from simulation to hardware in the
+loop testing, since all my testing had been done with the hardware in the loop.
 
 When I left that job, I took this concept with me and rebuilt this piece of
-infrastructure using a Wishbone Bus.
+infrastructure using a Wishbone Bus.  I am not going to recommend that others
+use this approach for bench testing, but I have found it very valuable for
+debugging on the hardware.
 \end{preface}
 
 \chapter{Introduction}
@@ -103,7 +105,9 @@ infrastructure using a Wishbone Bus.
 \setcounter{page}{1}
 
 The Wishbone Scope is a debugging tool for reading results from the chip after
-events have taken place.  In general, the scope records data until some
+events have taken place.  It designed to be a peripheral on an already
+existing wishbone bus--pushing the complicated task of getting a bus up
+and running elsewhere.  In general, the scope records data until some
 some (programmable) holdoff number of data samples after a trigger has taken 
 place.  Once the holdoff has been reached, the scope stops recording and 
 asserts an interrupt.  At this time, data may be read from the scope in order 
@@ -113,25 +117,48 @@ First, the trigger and the data that the scope records are both implementation
 dependent.  The scope itself is designed to be easily reconfigurable from one 
 build to the next so that the actual configuration may even be build dependent.
  
-Second, the scope is built to be able to run off of a separate clock from the
-bus that commands and controls it.  This is configurable, set the parameter
-``SYNCHRONOUS'' to `1' to run off of a single clock.  When running off of two
-clocks, it means that actions associated with commands issued to the scope, 
-such as manual triggering or being disabled or released, will not act 
-synchronously with the scope itself--but this is to be expected.
+Second, the scope is built to be able to run synchronously with the bus clock,
+or off of a separate data clock.  Whether or not the two are synchronous is
+controlled by the ``SYNCHRONOUS'' parameter.  When running off of two
+clocks, the actions associated with commands issued to the scope, 
+such as manual triggering, as well as disabling or releasing the trigger, will
+not act synchronously with the scope itself--but this is to be expected.
 
 Third, the data clock associated with the scope has a clock enable line
 associated with it.  Depending on how often the clock enable line is enabled
-may determine how fast the scope is {\tt PRIMED}, {\tt TRIGGERED}, and eventually completes
-its collection.
+may determine how fast the scope is {\tt PRIMED}, {\tt TRIGGERED}, and then
+eventually completes its collection.
 
 Finally, and in conclusion, this scope has been an invaluable tool for
 testing, for figuring out what is going on internal to a chip, and for fixing
-such things.  I have fixed interactions over a PS/2 connection, Internal 
+such things.  I have diagnosed PS/2 interactions, Internal 
 Configuration Access Port (ICAPE2) interfaces, mouse controller interactions,
-bus errors, quad-SPI flash interactions, and more using this scope.
+bus errors, quad-SPI flash interactions, SD--card interface, VGA, HDMI, and
+even the internals of a CPU all using this scope.
  
-% \chapter{Architecture}
+\chapter{Architecture}
+
+The wishbone scope package comes with two separate scopes: the regular scope,
+and a run-length encoded scope.  
+
+Both scopes are designed to be a component of a larger design.  They depend upon
+the existence of a reliable wishbone bus which can be accessed independent of
+the portion of the design under test. 
+
+Both scopes exist as a slave peripheral on this wishbone bus.
+
+The bus master still needs to interact with this slave to first configure it,
+and second to read any data off of it.
+
+Interaction with the scopes is identical, save for two differences.  First, the
+run-length encoded scope uses the high order bit to specify the number of
+times to repeat the last data item.  This means that the run-length encoded
+scope can only store 31~bits per time interval, versus the 32~bits per time
+interval of the regular scope.
+
+Since the two scopes are so similar, they will collectively be called the
+Wishbone Scope, and differences will only be mentioned where appropriate.
+
 \chapter{Operation}
  
 So how shall one use the scope?  The scope itself supports a series of
@@ -170,7 +197,7 @@ is filled, the scope has been {\tt PRIMED}.  Once the scope has been
 active on an input clock with the clock--enable line set, the scope will then
 be {\tt TRIGGERED}.  It
 will then count for the number of clocks in the holdoff before stopping 
-collection, placing it in the {\tt STOPPED} state.  \footnote{You can even
+collection, placing it in the {\tt STOPPED} state.\footnote{You can even
 change the holdoff while the scope is running by writing a new holdoff value
 together with setting the {\tt RESET\_n} bit of the control register.  However,
 if you do this after the core has triggered it may stop at some other
@@ -211,7 +238,7 @@ Tbl.~\ref{tbl:reglist}: a control register and a data register.
 \begin{reglist}
 CONTROL	& 0 & 32 & R/W & Configuration, control, and status of the
         scope.\\\hline
-DATA	& 1 & 32 & R(/W) & Read out register, to read out the data
+DATA	& 4 & 32 & R(/W) & Read out register, to read out the data
         from the core.  Writes to this register reset the read address
         to the beginning of the buffer, but are otherwise ignored.
         \\\hline
@@ -253,7 +280,7 @@ and {\tt STOPPED}).
 Finally, user's are cautioned not to adjust the holdoff between the time the
 scope triggers and the time it stops--just to guarantee data coherency.
 
-While this approach works, the scope has some other capabilities.  For example,
+The scope also has some other capabilities.  For example,
 if you set the {\tt MANUAL} bit, the scope will trigger as soon as it is {\tt PRIMED}.
 If you set the {\tt MANUAL} bit and the {\tt RESET\_n} bit, it will trigger
 immediately if the scope was already {\tt PRIMED}.  However, if the
@@ -281,8 +308,9 @@ long.
 This is perhaps the simplest register to explain.  Before the core stops
 recording, reads from this register will produce reads of the bits going into
 the core, save only that they have not been protected from any meta-stability
-issues.  This is useful for reading what's going on when the various lines are
-stuck.  After the core stops recording, reads from this register return values
+issues.  This may be useful for reading what's going on when the various lines
+are stuck, although there are potential race conditions when using this feature.
+After the core stops recording, reads from this register return values
 from the stored memory, beginning at the oldest and ending with the value
 holdoff clocks after the trigger.  Further, after recording has stopped, every
 read increments an internal memory address, so that after (1$<<$LGMEMLEN)
@@ -293,6 +321,16 @@ memory, you may either check the control register's {\tt RZERO} flag which will
 be `1' for the first value in the buffer, or you may write to the data register.
 Such writes will be ignored, save that they will reset the read address back
 to the beginning of the buffer.
+
+If the holdoff is set to zero, the last data value will be the value recorded
+when the trigger took place.  As the holdoff increases, the trigger will move
+earlier and earlier into the buffer.
+
+The data register for the compressed scope will indicate the presence of a 
+run in the high order bit.  If the high order bit is set, the last value
+will be repeated one plus the value held in the register.  Hence, a
+data value of {\tt 0x80000000} indicates a value repeated once, while
+{\tt 0x80000001 } indicates the value has been repeated twice and so on.
  
 \chapter{Clocks}
 
@@ -302,6 +340,9 @@ will take place between these two clocks.  Setting this parameter to a one
 will save some flip flops and logic in implementation.  The speeds of the
 respective clocks are based upon the speed of your device, and not specific
 to this core.
+
+That said, I have run the core up to 200~MHz on a Xilinx Artix-7, and so
+it has been modified to match that speed.
  
 \chapter{Wishbone Datasheet}\label{chap:wishbone}
 Tbl.~\ref{tbl:wishbone}
@@ -337,28 +378,37 @@ registers become 32--bit reads and writes to this interface.  You may also wish
 to note that the scope supports pipeline reads from the data port, to speed
 up reading the results out.
 
-What this table doesn't show is that all accesses to the port take a single
-clock.  That is, if the {\tt i\_wb\_stb} line is high on one clock, the
-{\tt i\_wb\_ack} line will be high the next.  Further, the {\tt o\_wb\_stall}
-line is tied to zero. 
+The {\tt o\_wb\_stall} line is tied to zero. 
+
+The {\tt i\_wb\_cyc} line is assumed any time {\tt i\_wb\_stb} is high, and so
+the core ignores {\tt i\_wb\_cyc}.
+
+The core does not implement the {\tt i\_wb\_sel} lines.  Writes to the core
+of values less than a word are undefined.  Reads of less than a word in
+size will act as whole word reads.
+
+
 \chapter{I/O Ports}\label{ch:ioports}
 
-The ports are listed in Table.~\ref{tbl:ioports}.
+The external I/O ports for both cores are listed in Table.~\ref{tbl:ioports}.
 \begin{table}[htbp]
 \begin{center}
 \begin{portlist}
-{\tt i\_clk} & 1 & Input & The clock the data lines, clock enable, and trigger
-	are synchronous to. \\\hline
+{\tt i\_data\_clk} & 1 & Input & The clock the data lines, clock enable, and
+	trigger are synchronous to. \\\hline
 {\tt i\_ce} & 1 & Input & Clock Enable.  Set this high to clock data in and
-        out.\\\hline
+        out.  No data will move through the core if this is low. \\\hline
 {\tt i\_trigger} & 1 & Input & An active high trigger line.  If this trigger is
         set to one on any clock enabled data clock cycle, once
         the scope has been {\tt PRIMED}, it will then enter into its
 	{\tt TRIGGERED} state.
         \\\hline
-{\tt i\_data} & 32 & Input & 32--wires of ... whatever you are interested in
-        recording and later examining.  These can be anything, only
-        they should be synchronous with the data clock.
+{\tt i\_data} & 32 & Input & \parbox{3.3in}{{\tt WBSCOPE ONLY: } 32--wires of
+	... whatever you
+	are interested in recording and later examining.  These can be anything,
+	only they should be synchronous with the data clock.
+
+	{\tt WBSCOPC: } The data width is only 31 wide instead of 32}
         \\\hline
 {\tt i\_wb\_clk} & 1 & Input & The clock that the wishbone interface runs on.
 		\\\hline
@@ -375,7 +425,7 @@ The ports are listed in Table.~\ref{tbl:ioports}.
 {\tt i\_wb\_data} & 32 & Input & Data used when writing to the control register,
 		ignored otherwise.  \\\hline
 {\tt o\_wb\_ack} & 1 & Output & Wishbone acknowledgement.  This line will go
-		high on the clock after any wishbone access, as long as the
+		high two clocks after any wishbone access, as long as the
 		wishbone {\tt i\_wb\_cyc} line remains high (i.e., no ack's if
 		you terminate the cycle early).
 		\\\hline

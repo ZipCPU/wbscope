@@ -1,13 +1,15 @@
 ################################################################################
 ##
-## Filename:	Makefile
+## Filename:	rtl/Makefile
 ##
 ## Project:	WBScope, a wishbone hosted scope
 ##
-## Purpose:	This makefile builds a verilator simulation of the rtl
-##		testbenches necessary to test certain components of both the
-##	wishbone scope and its RLE compressed brother using Verilator.
+## Purpose:	To direct the Verilator build of the SoC sources.  The result
+##		is C++ code (built by Verilator), that is then built (herein)
+##	into a library.
 ##
+## Targets:	The default target, all, builds the target test, which includes
+##		the libraries necessary for Verilator testing.
 ##
 ## Creator:	Dan Gisselquist, Ph.D.
 ##		Gisselquist Technology, LLC
@@ -34,50 +36,32 @@
 ## License:	GPL, v3, as defined and found on www.gnu.org,
 ##		http://www.gnu.org/licenses/gpl.html
 ##
-##
 ################################################################################
 ##
 ##
-.PHONY: all
-all: wbscope_tb wbscopc_tb
+all:	test
+FBDIR := .
+VDIRFB:= $(FBDIR)/obj_dir
 
-RTLD := ../../rtl
-VOBJ := obj_dir
+.PHONY: test
+test: $(VDIRFB)/Vwbscope__ALL.a
+test: $(VDIRFB)/Vwbscopc__ALL.a
 
-#
-#
-# Building the wbscope test bench
-#
-#
-$(VOBJ)/Vwbscope_tb.cpp: $(RTLD)/wbscope.v wbscope_tb.v
-	verilator -trace -cc  -y $(RTLD) wbscope_tb.v
-$(VOBJ)/Vwbscope_tb.h: $(VOBJ)/Vwbscope_tb.cpp
+$(VDIRFB)/Vwbscope__ALL.a: $(VDIRFB)/Vwbscope.h $(VDIRFB)/Vwbscope.cpp
+$(VDIRFB)/Vwbscope__ALL.a: $(VDIRFB)/Vwbscope.mk
+$(VDIRFB)/Vwbscope.h $(VDIRFB)/Vwbscope.cpp $(VDIRFB)/Vwbscope.mk: wbscope.v
 
-$(VOBJ)/Vwbscope_tb__ALL.a: $(VOBJ)/Vwbscope_tb.cpp $(VOBJ)/Vwbscope_tb.h
-	make --no-print-directory --directory=$(VOBJ) -f Vwbscope_tb.mk
+$(VDIRFB)/Vwbscopc__ALL.a: $(VDIRFB)/Vwbscopc.h $(VDIRFB)/Vwbscopc.cpp
+$(VDIRFB)/Vwbscopc__ALL.a: $(VDIRFB)/Vwbscopc.mk
+$(VDIRFB)/Vwbscopc.h $(VDIRFB)/Vwbscopc.cpp $(VDIRFB)/Vwbscopc.mk: wbscopc.v
 
-.PHONY: wbscope_tb
-wbscope_tb: $(VOBJ)/Vwbscope_tb__ALL.a
+$(VDIRFB)/V%.cpp $(VDIRFB)/V%.h $(VDIRFB)/V%.mk: $(FBDIR)/%.v
+	verilator -cc $*.v 
 
-#
-#
-# Building the wbscopc test bench, for the compressed wbscope
-#
-#
-$(VOBJ)/Vwbscopc_tb.cpp: $(RTLD)/wbscopc.v wbscopc_tb.v
-	verilator -trace -cc  -y $(RTLD) wbscopc_tb.v
-$(VOBJ)/Vwbscopc_tb.h: $(VOBJ)/Vwbscopc_tb.cpp
-
-$(VOBJ)/Vwbscopc_tb__ALL.a: $(VOBJ)/Vwbscopc_tb.cpp $(VOBJ)/Vwbscopc_tb.h
-	make --no-print-directory --directory=$(VOBJ) -f Vwbscopc_tb.mk
-
-.PHONY: wbscopc_tb
-wbscopc_tb: $(VOBJ)/Vwbscopc_tb__ALL.a
-
-# $(VOBJ)/Vaxiscope_tb.cpp: $(RTLD)/axiscope.v axiscope.v
-#	verilator -trace -cc  -y $(RTLD) wbscope_tb.v
-# $(VOBJ)/Vaxiscope_tb.h: $(VOBJ)/Vwbscope_tb.cpp
+$(VDIRFB)/V%__ALL.a: $(VDIRFB)/V%.mk
+	cd $(VDIRFB); make -f V$*.mk
 
 .PHONY: clean
 clean:
-	rm -rf $(VOBJ)
+	rm -rf $(VDIRFB)/
+

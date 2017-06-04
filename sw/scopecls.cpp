@@ -65,6 +65,7 @@ void	SCOPE::decode_control(void) {
 	unsigned	v;
 
 	v = m_fpga->readio(m_addr);
+	printf("\tCNTRL-REG:\t0x%08x\n", v);
 	printf("\t31. RESET:\t%s\n", (v&0x80000000)?"Ongoing":"Complete");
 	printf("\t30. STOPPED:\t%s\n", (v&0x40000000)?"Yes":"No");
 	printf("\t29. TRIGGERED:\t%s\n", (v&0x20000000)?"Yes":"No");
@@ -143,7 +144,7 @@ void	SCOPE::rawread(void) {
 }
 
 void	SCOPE::print(void) {
-	DEVBUS::BUSW	addrv = 0;
+	unsigned long addrv = 0;
 
 	rawread();
 
@@ -156,7 +157,7 @@ void	SCOPE::print(void) {
 					(m_data[i]&0x07fffffff));
 				continue;
 			}
-			printf("%10d %08x: ", addrv++, m_data[i]);
+			printf("%10ld %08x: ", addrv++, m_data[i]);
 			decode(m_data[i]);
 			printf("\n");
 		}
@@ -289,8 +290,8 @@ void	SCOPE::writevcd(FILE *fp) {
 	if(m_compressed) {
 		// With compressed scopes, you need to track the address
 		// relative to the beginning.
-		unsigned	addrv = 0;
-		unsigned 	now_ns;
+		unsigned long	addrv = 0;
+		unsigned long	now_ns;
 		double		dnow;
 
 		// Loop over each data word read from the scope
@@ -299,15 +300,21 @@ void	SCOPE::writevcd(FILE *fp) {
 			// than an increment
 			if ((m_data[i]>>31)&1) {
 				// But ... with nothing to write out.
-				addrv += (m_data[i]&0x7fffffff);
+				addrv += (m_data[i]&0x7fffffff) + 1;
 				continue;
 			}
 
 			// Produce a line identifying the time associated with
 			// this piece of data.
 			dnow = 1.0/((double)m_clkfreq_hz) * addrv;
-			now_ns = (unsigned)(dnow * 1e9);
-			fprintf(fp, "#%d\n", now_ns);
+			now_ns = (unsigned long)(dnow * 1e9);
+			/*
+			fprintf(fp, "#%d\t// %08x @ %08x (%12d) -- %12.9f %12.3f\n",
+				now_ns,
+				addrv, m_clkfreq_hz, m_clkfreq_hz,
+				dnow, (dnow*1e9));
+			*/
+			fprintf(fp, "#%ld\n", now_ns);
 
 			// For compressed data, only the lower 31 bits are
 			// valid.  Write those bits to the VCD file as a raw
@@ -320,6 +327,8 @@ void	SCOPE::writevcd(FILE *fp) {
 				TRACEINFO *info = m_traces[k];
 				write_binary_trace(fp, info, m_data[i]);
 			}
+
+			addrv++;
 		}
 	} else {
 		//
@@ -391,5 +400,4 @@ void	SCOPE::writevcd(const char *trace_file_name) {
 
 	fclose(fp);
 }
-
 
