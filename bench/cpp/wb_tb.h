@@ -37,6 +37,7 @@
 //
 //
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <verilated.h>
 #include <verilated_vcd_c.h>
@@ -143,7 +144,9 @@ public:
 
 		do {
 			int	s;
-			s = (TESTB<VA>::m_core->o_wb_stall==0)?0:1;
+			TESTB<VA>::m_core->i_wb_stb = ((rand()&7)!=0) ? 1:0;
+			s = ((TESTB<VA>::m_core->i_wb_stb)
+				&&(TESTB<VA>::m_core->o_wb_stall==0))?0:1;
 			TICK();
 			TESTB<VA>::m_core->i_wb_addr += (inc&(s^1))?4:0;
 			cnt += (s^1);
