@@ -50,7 +50,7 @@ VOBJ := obj_dir
 #
 #
 $(VOBJ)/Vwbscope_tb.cpp: $(RTLD)/wbscope.v wbscope_tb.v
-	verilator -trace -cc  -y $(RTLD) wbscope_tb.v
+	verilator -Wall -O3 -trace -cc  -y $(RTLD) wbscope_tb.v
 $(VOBJ)/Vwbscope_tb.h: $(VOBJ)/Vwbscope_tb.cpp
 
 $(VOBJ)/Vwbscope_tb__ALL.a: $(VOBJ)/Vwbscope_tb.cpp $(VOBJ)/Vwbscope_tb.h
@@ -65,7 +65,7 @@ wbscope_tb: $(VOBJ)/Vwbscope_tb__ALL.a
 #
 #
 $(VOBJ)/Vwbscopc_tb.cpp: $(RTLD)/wbscopc.v wbscopc_tb.v
-	verilator -trace -cc  -y $(RTLD) wbscopc_tb.v
+	verilator -Wall -O3 -trace -cc  -y $(RTLD) wbscopc_tb.v
 $(VOBJ)/Vwbscopc_tb.h: $(VOBJ)/Vwbscopc_tb.cpp
 
 $(VOBJ)/Vwbscopc_tb__ALL.a: $(VOBJ)/Vwbscopc_tb.cpp $(VOBJ)/Vwbscopc_tb.h

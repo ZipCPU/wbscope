@@ -56,7 +56,7 @@ $(VDIRFB)/Vwbscopc__ALL.a: $(VDIRFB)/Vwbscopc.mk
 $(VDIRFB)/Vwbscopc.h $(VDIRFB)/Vwbscopc.cpp $(VDIRFB)/Vwbscopc.mk: wbscopc.v
 
 $(VDIRFB)/V%.cpp $(VDIRFB)/V%.h $(VDIRFB)/V%.mk: $(FBDIR)/%.v
-	verilator -cc $*.v 
+	verilator -Wall -cc $*.v
 
 $(VDIRFB)/V%__ALL.a: $(VDIRFB)/V%.mk
 	cd $(VDIRFB); make -f V$*.mk

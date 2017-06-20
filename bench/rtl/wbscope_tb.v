@@ -83,4 +83,9 @@ module	wbscope_tb(i_clk,
 			o_interrupt);
 
 	assign	o_wb_stall = 1'b0;
+
+	// verilator lint_off UNUSED
+	wire	[1:0]	unused;
+	assign	unused = { i_rst, wb_stall_ignored };
+	// verilator lint_on UNUSED
 endmodule
