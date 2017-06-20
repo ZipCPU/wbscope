@@ -145,7 +145,8 @@ int main(int  argc, char **argv) {
 
 	tb->wb_read(WBSCOPE_DATA, (1<<ln), buf, 0);
 	for(int i=0; i<(1<<ln); i++) {
-		printf("%4d: %08x\n", i, buf[i]);
+		printf("%4d: %08x%s\n", i, buf[i],
+			(i== (1<<ln)-1-(v&0x0fffff)) ? " <<--- TRIGGER!":"");
 		if ((i>0)&&(((buf[i]&0x7fffffff)-(buf[i-1]&0x7fffffff))!=1)) {
 			printf("ERR: Scope data doesn't increment!\n");
 			printf("\tIn other words--its not matching the test signal\n");
