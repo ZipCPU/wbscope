@@ -3,7 +3,7 @@
 //
 // Filename: 	axi4lscope.v
 //
-// Project:	FPGA Library of Routines
+// Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	This is a generic/library routine for providing a bus accessed
 //	'scope' or (perhaps more appropriately) a bus accessed logic analyzer.
@@ -12,7 +12,7 @@
 //	reset, the scope records a copy of the input data every time the clock
 //	ticks with the circuit enabled.  That is, it records these values up
 //	until the trigger.  Once the trigger goes high, the scope will record
-//	for bw_holdoff more counts before stopping.  Values may then be read
+//	for br_holdoff more counts before stopping.  Values may then be read
 //	from the buffer, oldest to most recent.  After reading, the scope may
 //	then be reset for another run.
 //
@@ -28,7 +28,7 @@
 //		5. The scope recording is then paused until the next reset.
 //		6. While stopped, the CPU can read the data from the scope
 //		7. -- oldest to most recent
-//		8. -- one value per i_rd&i_clk
+//		8. -- one value per i_rd&i_data_clk
 //		9. Writes to the data register reset the address to the
 //			beginning of the buffer
 //
@@ -68,7 +68,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2015-2016, Gisselquist Technology, LLC
+// Copyright (C) 2015-2017, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -81,7 +81,7 @@
 // for more details.
 //
 // You should have received a copy of the GNU General Public License along
-// with this program.  (It's in the $(ROOT)/doc directory, run make with no
+// with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
 //
@@ -92,13 +92,17 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
+`default_nettype	none
+//
 module axi4lscope
 	#(
 		// Users to add parameters here
-		parameter	LGMEM = 5'd10,
+		parameter [4:0]	LGMEM = 5'd10,
 		parameter	BUSW = 32,
 		parameter	SYNCHRONOUS=1,
-		parameter	DEFAULT_HOLDOFF = ((1<<(LGMEM-1))-4),
+		parameter	HOLDOFFBITS = 20,
+		parameter [(HOLDOFFBITS-1):0]	DEFAULT_HOLDOFF
+						= ((1<<(LGMEM-1))-4),
 		// User parameters ends
 		// DO NOT EDIT BELOW THIS LINE ---------------------
 		// Do not modify the parameters beyond this line
@@ -109,7 +113,7 @@ module axi4lscope
 	)
 	(
 		// Users to add ports here
-		input wire	i_clk,	// The data clock, can be set to ACLK
+		input wire	i_data_clk, // The data clock, can be set to ACLK
 		input wire	i_ce,	// = '1' when recordable data is present
 		input wire	i_trigger,// = '1' when interesting event hapns
 		input wire	[31:0]	i_data,
@@ -188,10 +192,11 @@ module axi4lscope
 	reg 				axi_bvalid;
 	reg [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_araddr;
 	reg 			 	axi_arready;
-	reg [C_S_AXI_DATA_WIDTH-1 : 0] 	axi_rdata;
 	// reg		 [1 : 0] 	axi_rresp;
 	reg  				axi_rvalid;
 
+
+	wire	write_stb;
 
 	///////////////////////////////////////////////////
 	//
@@ -233,8 +238,6 @@ module axi4lscope
 		else
 			axi_wready <= 1'b0;
 	assign	S_AXI_WREADY = axi_wready;
-
-	wire	write_stb;
 
 	always @(posedge S_AXI_ACLK)
 		if (i_reset)
@@ -303,6 +306,9 @@ module axi4lscope
 	// From here on down, Gisselquist Technology, LLC,
 	// claims a copyright on the code.
 	//
+	wire	bus_clock;
+	assign	bus_clock = S_AXI_ACLK;
+
 	wire	read_from_data;
 	assign	read_from_data = (S_AXI_ARVALID)&&(S_AXI_ARREADY)
 					&&(axi_araddr[0]);
@@ -312,6 +318,9 @@ module axi4lscope
 	wire	write_to_control;
 	assign	write_to_control = (write_stb)&&(!axi_awaddr[0]);
 
+	reg	read_address;
+	always @(posedge bus_clock)
+		read_address <= axi_araddr[0];
 
 	wire	[31:0]	i_wb_data;
 	assign	i_wb_data = S_AXI_WDATA;
@@ -338,22 +347,22 @@ module axi4lscope
 	// Our status/config register
 	wire		bw_reset_request, bw_manual_trigger,
 			bw_disable_trigger, bw_reset_complete;
-	reg	[22:0]	br_config;
-	wire	[19:0]	bw_holdoff;
-	initial	br_config = DEFAULT_HOLDOFF;
-	always @(posedge S_AXI_ACLK)
+	reg	[2:0]	br_config;
+	reg	[(HOLDOFFBITS-1):0]	br_holdoff;
+	initial	br_config = 3'b0;
+	initial	br_holdoff = DEFAULT_HOLDOFF;
+	always @(posedge bus_clock)
 		if (write_to_control)
 		begin
 			br_config <= { i_wb_data[31],
-				(i_wb_data[27]), 
-				i_wb_data[26],
-				i_wb_data[19:0] };
+				i_wb_data[27],
+				i_wb_data[26] };
+			br_holdoff <= i_wb_data[(HOLDOFFBITS-1):0];
 		end else if (bw_reset_complete)
-			br_config[22] <= 1'b1;
-	assign	bw_reset_request   = (~br_config[22]);
-	assign	bw_manual_trigger  = (br_config[21]);
-	assign	bw_disable_trigger = (br_config[20]);
-	assign	bw_holdoff         = br_config[19:0];
+			br_config[2] <= 1'b1;
+	assign	bw_reset_request   = (!br_config[2]);
+	assign	bw_manual_trigger  = (br_config[1]);
+	assign	bw_disable_trigger = (br_config[0]);
 
 	wire	dw_reset, dw_manual_trigger, dw_disable_trigger;
 	generate
@@ -372,7 +381,7 @@ module axi4lscope
 		// so do a clock transfer here
 		initial	q_iflags = 3'b000;
 		initial	r_reset_complete = 1'b0;
-		always @(posedge i_clk)
+		always @(posedge i_data_clk)
 		begin
 			q_iflags <= { bw_reset_request, bw_manual_trigger, bw_disable_trigger };
 			r_iflags <= q_iflags;
@@ -389,7 +398,7 @@ module axi4lscope
 		// clock that the reset has been accomplished
 		initial	q_reset_complete = 1'b0;
 		initial	qq_reset_complete = 1'b0;
-		always @(posedge S_AXI_ACLK)
+		always @(posedge bus_clock)
 		begin
 			q_reset_complete  <= r_reset_complete;
 			qq_reset_complete <= q_reset_complete;
@@ -403,15 +412,14 @@ module axi4lscope
 	//
 	//
 	// Write with the i-clk, or input clock.  All outputs read with the
-	// WISHBONE-clk, or S_AXI_ACLK clock.
+	// bus clock, or bus_clock  as we've called it here.
 	reg	dr_triggered, dr_primed;
 	wire	dw_trigger;
 	assign	dw_trigger = (dr_primed)&&(
-				((i_trigger)&&(~dw_disable_trigger))
-				||(dr_triggered)
+				((i_trigger)&&(!dw_disable_trigger))
 				||(dw_manual_trigger));
 	initial	dr_triggered = 1'b0;
-	always @(posedge i_clk)
+	always @(posedge i_data_clk)
 		if (dw_reset)
 			dr_triggered <= 1'b0;
 		else if ((i_ce)&&(dw_trigger))
@@ -421,24 +429,26 @@ module axi4lscope
 	// Determine when memory is full and capture is complete
 	//
 	// Writes take place on the data clock
+	// The counter is unsigned
+	(* ASYNC_REG="TRUE" *) reg	[(HOLDOFFBITS-1):0]	counter;
+
 	reg		dr_stopped;
-	reg	[19:0]	counter;	// This is unsigned
 	initial	dr_stopped = 1'b0;
-	initial	counter = 20'h0000;
-	always @(posedge i_clk)
+	initial	counter = 0;
+	always @(posedge i_data_clk)
 		if (dw_reset)
-		begin
 			counter <= 0;
-			dr_stopped <= 1'b0;
-		end else if ((i_ce)&&(dr_triggered))
-		begin // MUST BE a < and not <=, so that we can keep this w/in
-			// 20 bits.  Else we'd need to add a bit to comparison 
-			// here.
-			if (counter < bw_holdoff)
-				counter <= counter + 20'h01;
-			else
-				dr_stopped <= 1'b1;
+		else if ((i_ce)&&(dr_triggered)&&(!dr_stopped))
+		begin
+			counter <= counter + 1'b1;
 		end
+	always @(posedge i_data_clk)
+		if ((!dr_triggered)||(dw_reset))
+			dr_stopped <= 1'b0;
+		else if (HOLDOFFBITS > 1) // if (i_ce)
+			dr_stopped <= (counter >= br_holdoff);
+		else if (HOLDOFFBITS <= 1)
+			dr_stopped <= ((i_ce)&&(dw_trigger));
 
 	//
 	//	Actually do our writes to memory.  Record, via 'primed' when
@@ -453,20 +463,57 @@ module axi4lscope
 	reg	[(LGMEM-1):0]	waddr;
 	initial	waddr = {(LGMEM){1'b0}};
 	initial	dr_primed = 1'b0;
-	always @(posedge i_clk)
+	always @(posedge i_data_clk)
 		if (dw_reset) // For simulation purposes, supply a valid value
 		begin
 			waddr <= 0; // upon reset.
 			dr_primed <= 1'b0;
-		end else if ((i_ce)&&((~dr_triggered)||(counter < bw_holdoff)))
+		end else if ((i_ce)&&(!dr_stopped))
 		begin
 			// mem[waddr] <= i_data;
 			waddr <= waddr + {{(LGMEM-1){1'b0}},1'b1};
-			dr_primed <= (dr_primed)||(&waddr);
+			if (!dr_primed)
+			begin
+				//if (br_holdoff[(HOLDOFFBITS-1):LGMEM]==0)
+				//	dr_primed <= (waddr >= br_holdoff[(LGMEM-1):0]);
+				// else
+				
+					dr_primed <= (&waddr);
+			end
 		end
-	always @(posedge i_clk)
-		if ((i_ce)&&((~dr_triggered)||(counter < bw_holdoff)))
-			mem[waddr] <= i_data;
+
+	// Delay the incoming data so that we can get our trigger
+	// logic to line up with the data.  The goal is to have a
+	// hold off of zero place the trigger in the last memory
+	// address.
+	localparam	STOPDELAY = 1;
+	wire	[(BUSW-1):0]		wr_piped_data;
+	generate
+	if (STOPDELAY == 0)
+		// No delay ... just assign the wires to our input lines
+		assign	wr_piped_data = i_data;
+	else if (STOPDELAY == 1)
+	begin
+		//
+		// Delay by one means just register this once
+		reg	[(BUSW-1):0]	data_pipe;
+		always @(posedge i_data_clk)
+			if (i_ce)
+				data_pipe <= i_data;
+		assign	wr_piped_data = data_pipe;
+	end else begin
+		// Arbitrary delay ... use a longer pipe
+		reg	[(STOPDELAY*BUSW-1):0]	data_pipe;
+
+		always @(posedge i_data_clk)
+			if (i_ce)
+				data_pipe <= { data_pipe[((STOPDELAY-1)*BUSW-1):0], i_data };
+		assign	wr_piped_data = { data_pipe[(STOPDELAY*BUSW-1):((STOPDELAY-1)*BUSW)] };
+	end endgenerate
+
+	always @(posedge i_data_clk)
+		if ((i_ce)&&(!dr_stopped))
+			mem[waddr] <= wr_piped_data;
 
 	//
 	// Clock transfer of the status signals
@@ -488,7 +535,7 @@ module axi4lscope
 		reg	[2:0]	r_oflags;
 		initial	q_oflags = 3'h0;
 		initial	r_oflags = 3'h0;
-		always @(posedge S_AXI_ACLK)
+		always @(posedge bus_clock)
 			if (bw_reset_request)
 			begin
 				q_oflags <= 3'h0;
@@ -504,34 +551,37 @@ module axi4lscope
 	end endgenerate
 
 	// Reads use the bus clock
-	reg	br_wb_ack;
-	initial	br_wb_ack = 1'b0;
-	always @(posedge S_AXI_ACLK)
+	always @(posedge bus_clock)
 	begin
-		if ((bw_reset_request)||((write_stb)&&(axi_awaddr[0])))
+		if ((bw_reset_request)||(write_to_control))
 			raddr <= 0;
 		else if ((read_from_data)&&(bw_stopped))
-			// Data read ... only takes place when stopped
-			raddr <= raddr + {{(LGMEM-1){1'b0}},1'b1};
+			raddr <= raddr + 1'b1; // Data read, when stopped
 	end
 
+	reg	[(LGMEM-1):0]	this_addr;
+	always @(posedge bus_clock)
+		if (read_from_data)
+			this_addr <= raddr + waddr + 1'b1;
+		else
+			this_addr <= raddr + waddr;
 
 	reg	[31:0]	nxt_mem;
-	always @(posedge S_AXI_ACLK)
-		nxt_mem <= mem[raddr+waddr+ ((read_from_data) ?
-				{{(LGMEM-1){1'b0}},1'b1} : { (LGMEM){1'b0}} )];
+	always @(posedge bus_clock)
+		nxt_mem <= mem[this_addr];
 
+	wire	[19:0]	full_holdoff;
+	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;
+	generate if (HOLDOFFBITS < 20)
+		assign full_holdoff[19:(HOLDOFFBITS)] = 0;
+	endgenerate
 
-
-
-
-
-
+	reg	[31:0]	o_bus_data;
 	wire	[4:0]	bw_lgmem;
 	assign		bw_lgmem = LGMEM;
-	always @(posedge S_AXI_ACLK)
-		if (~axi_araddr[0]) // Control register read
-			axi_rdata <= { bw_reset_request,
+	always @(posedge bus_clock)
+		if (!read_address) // Control register read
+			o_bus_data <= { bw_reset_request,
 					bw_stopped,
 					bw_triggered,
 					bw_primed,
@@ -539,24 +589,29 @@ module axi4lscope
 					bw_disable_trigger,
 					(raddr == {(LGMEM){1'b0}}),
 					bw_lgmem,
-					bw_holdoff  };
-		else if (~bw_stopped) // read, prior to stopping
-			axi_rdata <= i_data;
+					full_holdoff  };
+		else if (!bw_stopped) // read, prior to stopping
+			o_bus_data <= i_data;
 		else // if (i_wb_addr) // Read from FIFO memory
-			axi_rdata <= nxt_mem; // mem[raddr+waddr];
-	assign	S_AXI_RDATA = axi_rdata;
+			o_bus_data <= nxt_mem; // mem[raddr+waddr];
 
+	assign	S_AXI_RDATA = o_bus_data;
 
 	reg	br_level_interrupt;
 	initial	br_level_interrupt = 1'b0;
-	assign	o_interrupt = (bw_stopped)&&(~bw_disable_trigger)
-					&&(~br_level_interrupt);
-	always @(posedge S_AXI_ACLK)
+	assign	o_interrupt = (bw_stopped)&&(!bw_disable_trigger)
+					&&(!br_level_interrupt);
+	always @(posedge bus_clock)
 		if ((bw_reset_complete)||(bw_reset_request))
 			br_level_interrupt<= 1'b0;
 		else
-			br_level_interrupt<= (bw_stopped)&&(~bw_disable_trigger);
+			br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
 
+	// verilator lint_off UNUSED
+	// Make verilator happy
+	wire	[44:0]	unused;
+	assign unused = { S_AXI_WSTRB, S_AXI_ARPROT, S_AXI_AWPROT,
+		axi_awaddr[3:1], axi_araddr[3:1],
+		i_wb_data[30:28], i_wb_data[25:0] };
+	// verilator lint_on UNUSED
 endmodule
-
-
