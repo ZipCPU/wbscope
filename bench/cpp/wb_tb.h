@@ -42,37 +42,63 @@
 #include <verilated.h>
 #include <verilated_vcd_c.h>
 #include "testb.h"
+#include "devbus.h"
 
 const int	BOMBCOUNT = 32;
 
-template <class VA>	class	WB_TB : public TESTB<VA> {
+template <class VA>	class	WB_TB : public TESTB<VA>, public DEVBUS {
+#ifdef	WBERR
+	bool	m_buserr;
+#endif
+#ifdef	INTERRUPTWIRE
+	bool	m_interrupt;
+#endif
 public:
+	typedef	uint32_t	BUSW;
+	
 	bool	m_bomb;
 
 	WB_TB(void) {
 		m_bomb = false;
 		TESTB<VA>::m_core->i_wb_cyc = 0;
 		TESTB<VA>::m_core->i_wb_stb = 0;
+#ifdef	WBERR
+		m_buserr = false;
+#endif
+#ifdef	INTERRUPTWIRE
+		m_interrupt = false;
+#endif
 	}
 
-#define	TICK	this->tick
-	/*
+	virtual	void	close(void) {
+		TESTB<VA>::closetrace();
+	}
+
+	virtual	void	kill(void) {
+		close();
+	}
+
+#ifdef	INTERRUPTWIRE
 	virtual	void	tick(void) {
-		printf("WB-TICK\n");
 		TESTB<VA>::tick();
+		if (TESTB<VA>::m_core->INTERRUPTWIRE)
+			m_interrupt = true;
 	}
-	*/
+#endif
+#define	TICK	this->tick
 
-	void	wb_tick(void) {
+	void	idle(const unsigned counts = 1) {
 		TESTB<VA>::m_core->i_wb_cyc = 0;
 		TESTB<VA>::m_core->i_wb_stb = 0;
-		this->tick();
-		assert(!TESTB<VA>::m_core->o_wb_ack);
+		for(unsigned k=0; k<counts; k++) {
+			this->tick();
+			assert(!TESTB<VA>::m_core->o_wb_ack);
+		}
 	}
 
-	unsigned wb_read(unsigned a) {
+	BUSW readio(BUSW a) {
 		int		errcount = 0;
-		unsigned	result;
+		BUSW		result;
 
 		// printf("WB-READM(%08x)\n", a);
 
@@ -84,6 +110,14 @@ public:
 		if (TESTB<VA>::m_core->o_wb_stall) {
 			while((errcount++ < BOMBCOUNT)&&(TESTB<VA>::m_core->o_wb_stall)) {
 				TICK();
+#ifdef	WBERR
+				if (TESTB<VA>::m_core->WBERR) {
+					m_buserr = true;
+					TESTB<VA>::m_core->i_wb_cyc = 0;
+					TESTB<VA>::m_core->i_wb_stb = 0;
+					return -1;
+				}
+#endif
 			}
 		} TICK();
 
@@ -91,6 +125,14 @@ public:
 
 		while((errcount++ <  BOMBCOUNT)&&(!TESTB<VA>::m_core->o_wb_ack)) {
 			TICK();
+#ifdef	WBERR
+			if (TESTB<VA>::m_core->WBERR) {
+				m_buserr = true;
+				TESTB<VA>::m_core->i_wb_cyc = 0;
+				TESTB<VA>::m_core->i_wb_stb = 0;
+				return -1;
+			}
+#endif
 		}
 
 
@@ -115,7 +157,7 @@ public:
 		return result;
 	}
 
-	void	wb_read(unsigned a, int len, unsigned *buf, const int inc=1) {
+	void	readv(const BUSW a, int len, BUSW *buf, const int inc=1) {
 		int		errcount = 0;
 		int		THISBOMBCOUNT = BOMBCOUNT * len;
 		int		cnt, rdidx;
@@ -152,6 +194,14 @@ public:
 			cnt += (s^1);
 			if (TESTB<VA>::m_core->o_wb_ack)
 				buf[rdidx++] = TESTB<VA>::m_core->o_wb_data;
+#ifdef	WBERR
+			if (TESTB<VA>::m_core->WBERR) {
+				m_buserr = true;
+				TESTB<VA>::m_core->i_wb_cyc = 0;
+				TESTB<VA>::m_core->i_wb_stb = 0;
+				return -1;
+			}
+#endif
 		} while((cnt < len)&&(errcount++ < THISBOMBCOUNT));
 
 		TESTB<VA>::m_core->i_wb_stb = 0;
@@ -160,6 +210,14 @@ public:
 			TICK();
 			if (TESTB<VA>::m_core->o_wb_ack)
 				buf[rdidx++] = TESTB<VA>::m_core->o_wb_data;
+#ifdef	WBERR
+			if (TESTB<VA>::m_core->WBERR) {
+				m_buserr = true;
+				TESTB<VA>::m_core->i_wb_cyc = 0;
+				TESTB<VA>::m_core->i_wb_stb = 0;
+				return -1;
+			}
+#endif
 		}
 
 		// Release the bus
@@ -176,7 +234,15 @@ public:
 		assert(!TESTB<VA>::m_core->o_wb_ack);
 	}
 
-	void	wb_write(unsigned a, unsigned v) {
+	void	readi(const BUSW a, const int len, BUSW *buf) {
+		return readv(a, len, buf, 1);
+	}
+
+	void	readz(const BUSW a, const int len, BUSW *buf) {
+		return readv(a, len, buf, 0);
+	}
+
+	void	writeio(const BUSW a, const BUSW v) {
 		int errcount = 0;
 
 		printf("WB-WRITEM(%08x) <= %08x\n", a, v);
@@ -191,13 +257,38 @@ public:
 			while((errcount++ < BOMBCOUNT)&&(TESTB<VA>::m_core->o_wb_stall)) {
 				printf("Stalled, so waiting, errcount=%d\n", errcount);
 				TICK();
+#ifdef	WBERR
+				if (m_core->WBERR) {
+					m_buserr = true;
+					TESTB<VA>::m_core->i_wb_cyc = 0;
+					TESTB<VA>::m_core->i_wb_stb = 0;
+					return;
+				}
+#endif
 			}
 		TICK();
+#ifdef	WBERR
+		if (m_core->WBERR) {
+			m_buserr = true;
+			TESTB<VA>::m_core->i_wb_cyc = 0;
+			TESTB<VA>::m_core->i_wb_stb = 0;
+			return;
+		}
+#endif
 
 		TESTB<VA>::m_core->i_wb_stb = 0;
 
-		while((errcount++ <  BOMBCOUNT)&&(!TESTB<VA>::m_core->o_wb_ack))
+		while((errcount++ <  BOMBCOUNT)&&(!TESTB<VA>::m_core->o_wb_ack)) {
 			TICK();
+#ifdef	WBERR
+			if (m_core->WBERR) {
+				m_buserr = true;
+				TESTB<VA>::m_core->i_wb_cyc = 0;
+				TESTB<VA>::m_core->i_wb_stb = 0;
+				return;
+			}
+#endif
+		}
 		TICK();
 
 		// Release the bus?
@@ -208,11 +299,19 @@ public:
 			printf("WB/SW-BOMB: NO RESPONSE AFTER %d CLOCKS (LINE=%d)\n",errcount, __LINE__);
 			m_bomb = true;
 		} TICK();
+#ifdef	WBERR
+		if (m_core->WBERR) {
+			m_buserr = true;
+			TESTB<VA>::m_core->i_wb_cyc = 0;
+			TESTB<VA>::m_core->i_wb_stb = 0;
+			return;
+		}
+#endif
 		assert(!TESTB<VA>::m_core->o_wb_ack);
 		assert(!TESTB<VA>::m_core->o_wb_stall);
 	}
 
-	void	wb_write(unsigned a, unsigned int ln, unsigned *buf, const int inc=1) {
+	void	writev(const BUSW a, const int ln, const BUSW *buf, const int inc=1) {
 		unsigned errcount = 0, nacks = 0;
 
 		printf("WB-WRITEM(%08x, %d, ...)\n", a, ln);
@@ -230,11 +329,27 @@ public:
 				TICK();
 				if (TESTB<VA>::m_core->o_wb_ack)
 					nacks++;
+#ifdef	WBERR
+				if (m_core->WBERR) {
+					m_buserr = true;
+					TESTB<VA>::m_core->i_wb_cyc = 0;
+					TESTB<VA>::m_core->i_wb_stb = 0;
+					return;
+				}
+#endif
 			}
 			// Tick, now that we're not stalled.  This is the tick
 			// that gets accepted.
 			TICK();
 			if (TESTB<VA>::m_core->o_wb_ack) nacks++;
+#ifdef	WBERR
+			if (m_core->WBERR) {
+				m_buserr = true;
+				TESTB<VA>::m_core->i_wb_cyc = 0;
+				TESTB<VA>::m_core->i_wb_stb = 0;
+				return;
+			}
+#endif
 
 			// Now update the address
 			TESTB<VA>::m_core->i_wb_addr += (inc)?4:0;
@@ -249,6 +364,14 @@ public:
 				nacks++;
 				errcount = 0;
 			}
+#ifdef	WBERR
+			if (m_core->WBERR) {
+				m_buserr = true;
+				TESTB<VA>::m_core->i_wb_cyc = 0;
+				TESTB<VA>::m_core->i_wb_stb = 0;
+				return;
+			}
+#endif
 		}
 
 		// Release the bus
@@ -264,9 +387,69 @@ public:
 		assert(!TESTB<VA>::m_core->o_wb_stall);
 	}
 
+	void	writei(const BUSW a, const int ln, const BUSW *buf) {
+		writev(a, ln, buf, 1);
+	}
+
+	void	writez(const BUSW a, const int ln, const BUSW *buf) {
+		writev(a, ln, buf, 0);
+	}
+
+
 	bool	bombed(void) const { return m_bomb; }
 
 	// bool	debug(void) const	{ return m_debug; }
 	// bool	debug(bool nxtv)	{ return m_debug = nxtv; }
+
+	bool	poll(void) {
+#ifdef	INTERRUPTWIRE
+		return (m_interrupt)||(TESTB<VA>::m_core->INTERRUPTWIRE != 0);
+#else
+		return false;
+#endif
+	}
+
+	bool	bus_err(void) const {
+#ifdef	WBERR
+		return m_buserr;
+#else
+		return false;
+#endif
+	}
+
+	void	reset_err(void) {
+#ifdef	WBERR
+		m_buserr = false;;
+#endif
+	}
+
+	void	usleep(unsigned msec) {
+#ifdef	CLKRATEHZ
+		unsigned count = CLKRATEHZ / 1000 * msec;
+#else
+		// Assume 100MHz if no clockrate is given
+		unsigned count = 1000*100 * msec;
+#endif
+		while(count-- != 0)
+#ifdef	INTERRUPTWIRE
+			if (poll()) return; else
+#endif
+			TICK();
+	}
+
+	void	clear(void) {
+#ifdef	INTERRUPTWIRE
+		m_interrupt = false;
+#endif
+	}
+
+	void	wait(void) {
+#ifdef	INTERRUPTWIRE
+		while(!poll())
+			TICK();
+#else
+		assert(("No interrupt defined",0));
+#endif
+	}
 };
 

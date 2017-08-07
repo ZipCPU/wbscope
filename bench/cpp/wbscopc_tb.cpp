@@ -40,14 +40,16 @@
 
 #include <verilated.h>
 #include <verilated_vcd_c.h>
-#include "testb.h"
-#include "wb_tb.h"
 #include "Vwbscopc_tb.h"
+#include "testb.h"
+#include "devbus.h"
+#define	INTERRUPTWIRE	o_interrupt
+#include "wb_tb.h"
 
 const int LGMEMSIZE = 15;
 
 class	WBSCOPC_TB : public WB_TB<Vwbscopc_tb> {
-	bool		m_bomb, m_debug;
+	bool		m_debug;
 public:
 
 	WBSCOPC_TB(void) {
@@ -72,7 +74,7 @@ public:
 
 	unsigned	trigger(void) {
 		m_core->i_trigger = 1;
-		wb_tick();
+		idle();
 		m_core->i_trigger = 0;
 		printf("TRIGGERED AT %08x\n", m_core->o_data);
 		return m_core->o_data;
@@ -93,8 +95,7 @@ int main(int  argc, char **argv) {
 	printf("Giving the core 2 cycles to start up\n");
 	// Before testing, let's give the unit time enough to warm up
 	tb->reset();
-	for(int i=0; i<2; i++)
-		tb->wb_tick();
+	tb->idle(2);
 
 #define	WBSCOPE_STATUS	0
 #define	WBSCOPE_DATA	4
@@ -109,7 +110,7 @@ int main(int  argc, char **argv) {
 #define	WBSCOPE_LENGTH(A)	(1<<(LGLEN(A)))
 
 	// First test ... read the status register
-	v = tb->wb_read(WBSCOPE_STATUS);
+	v = tb->readio(WBSCOPE_STATUS);
 	int ln = WBSCOPE_LGLEN(v);
 	printf("V   = %08x\n", v);
 	printf("LN  = %d, or %d entries\n", ln, (1<<ln));
@@ -120,15 +121,9 @@ int main(int  argc, char **argv) {
 	}
 	buf = new unsigned[(1<<ln)];
 
-	for(int i=0; i<(1<<(12+4)); i++)
-		tb->wb_tick();
-	for(int i=0; i<(1<<ln); i++)
-		tb->wb_tick();
+	tb->idle((1<<(12+4)) + (1<<ln) +240);
 
-	for(int i=0; i<240; i++)
-		tb->wb_tick();
-
-	v = tb->wb_read(WBSCOPE_STATUS);
+	v = tb->readio(WBSCOPE_STATUS);
 	if ((v&WBSCOPE_PRIMED)==0) {
 		printf("v = %08x\n", v);
 		printf("SCOPE hasn\'t primed! ??\n");
@@ -136,7 +131,7 @@ int main(int  argc, char **argv) {
 	}
 
 	tb->trigger();
-	v = tb->wb_read(WBSCOPE_STATUS);
+	v = tb->readio(WBSCOPE_STATUS);
 	if ((v&WBSCOPE_TRIGGERED)==0) {
 		printf("v = %08x\n", v);
 		printf("SCOPE hasn\'t triggered! ??\n");
@@ -144,10 +139,10 @@ int main(int  argc, char **argv) {
 	}
 
 	while((v & WBSCOPE_STOPPED)==0)
-		v = tb->wb_read(WBSCOPE_STATUS);
+		v = tb->readio(WBSCOPE_STATUS);
 	printf("SCOPE has stopped, reading data\n");
 
-	tb->wb_read(WBSCOPE_DATA, (1<<ln), buf, 0);
+	tb->readz(WBSCOPE_DATA, (1<<ln), buf);
 	addr = 0;
 	trigger_addr = 0xffffffff;
 	for(int i=0; i<(1<<ln); i++) {
