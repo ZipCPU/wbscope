@@ -88,7 +88,7 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 	input	wire			i_wb_addr; // One address line only
 	input	wire	[(BUSW-1):0]	i_wb_data;
 	output	wire			o_wb_ack, o_wb_stall;
-	output	wire	[(BUSW-1):0]	o_wb_data;
+	output	reg	[(BUSW-1):0]	o_wb_data;
 	// And, finally, for a final flair --- offer to interrupt the CPU after
 	// our trigger has gone off.  This line is equivalent to the scope 
 	// being stopped.  It is not maskable here.
@@ -114,7 +114,7 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 				br_config <= { i_wb_data[31],
 					i_wb_data[27],
 					i_wb_data[26] };
-				br_holdoff = i_wb_data[(HOLDOFFBITS-1):0];
+				br_holdoff <= i_wb_data[(HOLDOFFBITS-1):0];
 			end
 		end else if (bw_reset_complete)
 			br_config[2] <= 1'b1;
@@ -234,7 +234,7 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 	// address difference get to our maximum value, we let it saturate
 	// rather than overflow.
 	reg	[(STEP_BITS-1):0]	ck_addr;
-	reg	[(NELM-1):0]		lst_dat, qd_data;
+	reg	[(NELM-1):0]		qd_data;
 	reg				dr_force_write, dr_run_timeout,
 					new_data;
 
@@ -311,7 +311,6 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 	reg	imm_adr, lst_adr; // Is this an address (1'b1) or data value?
 	reg	[(BUSW-2):0]	lst_val, // Data for the scope, delayed by one
 				imm_val; // Data to write to the scope
-	initial	lst_dat = 0;
 	initial	lst_adr = 1'b1;
 	initial	imm_adr = 1'b1;
 	always @(posedge i_data_clk)
@@ -321,7 +320,6 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 			imm_adr <= 1'b1;
 			lst_val <= 31'h0;
 			lst_adr <= 1'b1;
-			lst_dat <= 0;
 		end else if (i_ce)
 		begin
 			if ((new_data)||(dr_force_write)||(dr_stopped))
@@ -330,7 +328,6 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 				imm_adr <= 1'b0; // Last thing we wrote was data
 				lst_val <= imm_val;
 				lst_adr <= imm_adr;
-				lst_dat <= qd_data;
 			end else begin
 				imm_val <= ck_addr; // Minimum value here is '1'
 				imm_adr <= 1'b1; // This (imm) is an address
@@ -496,5 +493,10 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 		else
 			br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
 
+	// Make Verilator happy
+	// verilator lint_off UNUSED
+	wire	[3+5+(20-HOLDOFFBITS)-1:0] unused;
+	assign	unused = { i_wb_data[30:28], i_wb_data[25:HOLDOFFBITS] };
+	// verilator lint_on  UNUSED
 
 endmodule
