@@ -39,13 +39,15 @@
 ################################################################################
 ##
 ##
-all:	test
+all:	test axi
 FBDIR := .
 VDIRFB:= $(FBDIR)/obj_dir
 
 .PHONY: test
 test: $(VDIRFB)/Vwbscope__ALL.a
 test: $(VDIRFB)/Vwbscopc__ALL.a
+.PHONY: axi
+axi: $(VDIRFB)/Vaxi4lscope__ALL.a
 
 $(VDIRFB)/Vwbscope__ALL.a: $(VDIRFB)/Vwbscope.h $(VDIRFB)/Vwbscope.cpp
 $(VDIRFB)/Vwbscope__ALL.a: $(VDIRFB)/Vwbscope.mk
