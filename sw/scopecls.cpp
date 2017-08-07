@@ -144,14 +144,23 @@ void	SCOPE::rawread(void) {
 }
 
 void	SCOPE::print(void) {
-	unsigned long addrv = 0;
+	unsigned long addrv = 0, alen;
+	int	offset;
 
 	rawread();
+
+	// Count how many values are in our (possibly compressed) buffer.
+	// If it weren't for the compression, this'd be m_scoplen
+	alen = getaddresslen();
+
+	// If the holdoff is zero, the triggered item is the very
+	// last one.
+	offset = alen - m_holdoff -1;
 
 	if(m_compressed) {
 		for(int i=0; i<(int)m_scoplen; i++) {
 			if ((m_data[i]>>31)&1) {
-				addrv += (m_data[i]&0x7fffffff);
+				addrv += (m_data[i]&0x7fffffff) + 1;
 				printf(" ** (+0x%08x = %8d)\n",
 					(m_data[i]&0x07fffffff),
 					(m_data[i]&0x07fffffff));
@@ -159,6 +168,8 @@ void	SCOPE::print(void) {
 			}
 			printf("%10ld %08x: ", addrv++, m_data[i]);
 			decode(m_data[i]);
+			if ((int)addrv == offset)
+				printf(" <--- TRIGGER");
 			printf("\n");
 		}
 	} else {
@@ -169,6 +180,9 @@ void	SCOPE::print(void) {
 				continue;
 			} printf("%9d %08x: ", i, m_data[i]);
 			decode(m_data[i]);
+
+			if (i == offset)
+				printf(" <--- TRIGGER");
 			printf("\n");
 		}
 	}
@@ -179,7 +193,12 @@ void	SCOPE::write_trace_timescale(FILE *fp) {
 }
 
 void	SCOPE::write_trace_timezero(FILE *fp, int offset) {
-	fprintf(fp, "$timescale %d $end\n\n", offset);
+	double		dwhen;
+	long		when_ns;
+
+	dwhen = 1.0/((double)m_clkfreq_hz) * (offset);
+	when_ns = (unsigned long)(dwhen * 1e9);
+	fprintf(fp, "$timezero %ld $end\n\n", -when_ns);
 }
 
 // $dumpoff and $dumpon
@@ -203,6 +222,11 @@ void	SCOPE::write_trace_header(FILE *fp, int offset) {
 		fprintf(fp, "  $var wire %2d \'R _raw_data [%d:0] $end\n", 32,
 			31);
 	}
+
+	// Add in a fake _trigger variable to the VCD file we are producing,
+	// so we can see when our trigger took place (assuming the holdoff is
+	// such that it is within the collect)
+	fprintf(fp, "  $var wire %2d \'T _trigger $end\n", 1);
 
 	for(unsigned i=0; i<m_traces.size(); i++) {
 		TRACEINFO *info = m_traces[i];
@@ -260,6 +284,32 @@ void	SCOPE::register_trace(const char *name,
 }
 
 /*
+ * getaddresslen(void)
+ *
+ * Returns the number of items in the scope's buffer.  For the uncompressed
+ * scope, this is just the size of hte scope.  For the compressed scope ... this
+ * is a touch longer.
+ */
+unsigned	SCOPE::getaddresslen(void) {
+	// Find the offset to the trigger
+	if (m_compressed) {
+		// First, find the overall length
+		//
+		// If we are compressed, then *every* item increments
+		// the address length
+		unsigned alen = m_scoplen;
+		//
+		// Some items increment it more.
+		for(int i=0; i<(int)m_scoplen; i++) {
+			if ((m_data[i]&0x80000000)&&(i!=0))
+				alen += m_data[i] & 0x7fffffff;
+		}
+
+		return alen;
+	} return m_scoplen;
+}
+
+/*
  * define_traces
  *
  * This is a user stub.  User programs should define this function.
@@ -267,6 +317,7 @@ void	SCOPE::register_trace(const char *name,
 void	SCOPE::define_traces(void) {}
 
 void	SCOPE::writevcd(FILE *fp) {
+	unsigned	alen;
 	int	offset = 0;
 
 	if (!m_data)
@@ -276,11 +327,13 @@ void	SCOPE::writevcd(FILE *fp) {
 	if (m_traces.size()==0)
 		define_traces();
 
-	// Find the offset to the trigger
-	if (m_compressed) {
-		offset = 0;
-	} else
-		offset = m_scoplen - m_holdoff;
+	// Count how many values are in our (possibly compressed) buffer.
+	// If it weren't for the compression, this'd be m_scoplen
+	alen = getaddresslen();
+
+	// If the holdoff is zero, the triggered item is the very
+	// last one.
+	offset = alen - m_holdoff -1;
 
 	// Write the file header.
 	write_trace_header(fp, offset);
@@ -293,28 +346,45 @@ void	SCOPE::writevcd(FILE *fp) {
 		unsigned long	addrv = 0;
 		unsigned long	now_ns;
 		double		dnow;
+		bool		last_trigger = true;
 
 		// Loop over each data word read from the scope
 		for(int i=0; i<(int)m_scoplen; i++) {
 			// If the high bit is set, the address jumps by more
 			// than an increment
 			if ((m_data[i]>>31)&1) {
-				// But ... with nothing to write out.
-				addrv += (m_data[i]&0x7fffffff) + 1;
-				continue;
+				if (i!=0) {
+					if (last_trigger) {
+						// If the trigger was valid
+						// on the last clock, then we
+						// need to include the change
+						// to drop it.
+						//
+						dnow   = 1.0/((double)m_clkfreq_hz) * (addrv+1);
+						now_ns = (unsigned long)(dnow * 1e9);
+						fprintf(fp, "#%ld\n", now_ns);
+						fprintf(fp, "0\'T\n");
+					}
+					// But ... with nothing to write out.
+					addrv += (m_data[i]&0x7fffffff) + 1;
+				} continue;
 			}
 
 			// Produce a line identifying the time associated with
 			// this piece of data.
+			//
+			// dnow is the current time represented as a double
 			dnow = 1.0/((double)m_clkfreq_hz) * addrv;
+			// Convert to nanoseconds, and to integers.
 			now_ns = (unsigned long)(dnow * 1e9);
-			/*
-			fprintf(fp, "#%d\t// %08x @ %08x (%12d) -- %12.9f %12.3f\n",
-				now_ns,
-				addrv, m_clkfreq_hz, m_clkfreq_hz,
-				dnow, (dnow*1e9));
-			*/
+
 			fprintf(fp, "#%ld\n", now_ns);
+
+			if ((int)(addrv-alen) == offset) {
+				fprintf(fp, "1\'T\n");
+				last_trigger = true;
+			} else if (last_trigger)
+				fprintf(fp, "0\'T\n");
 
 			// For compressed data, only the lower 31 bits are
 			// valid.  Write those bits to the VCD file as a raw
@@ -359,6 +429,11 @@ void	SCOPE::writevcd(FILE *fp) {
 			fprintf(fp, "1\'C\n");
 			write_binary_trace(fp, (m_compressed)?31:32,
 				m_data[i], "\'R\n");
+
+			if (i == offset)
+				fprintf(fp, "1\'T\n");
+			else // if (addrv == offset+1)
+				fprintf(fp, "0\'T\n");
 
 			for(unsigned k=0; k<m_traces.size(); k++) {
 				TRACEINFO *info = m_traces[k];
