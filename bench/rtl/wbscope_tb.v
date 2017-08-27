@@ -8,8 +8,8 @@
 //		designed to create a "signal" which can then be scoped and
 //	proven.  In our case here, the "signal" is a counter.  When we test
 //	the scope within our bench/cpp Verilator testbench, we'll know if our
-//	test was "correct" if the counter 1) only ever counts by 1, and 2) if
-//	the trigger lands on thte right data sample.
+//	test was "correct" if the counter 1) only ever increments by 1, and
+//	2) if the trigger lands on thte right data sample.
 //
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
@@ -40,6 +40,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
+`default_nettype	none
+//
 module	wbscope_tb(i_clk,
 		// i_rst is required by our test infrastructure, yet unused here
 		i_rst,
@@ -52,18 +54,18 @@ module	wbscope_tb(i_clk,
 		o_wb_ack, o_wb_stall, o_wb_data,
 		// And our output interrupt
 		o_interrupt);
-	input			i_clk, i_rst, i_trigger;
+	input	wire		i_clk, i_rst, i_trigger;
 	output	wire	[31:0]	o_data;
 	//
-	input			i_wb_cyc, i_wb_stb, i_wb_we;
-	input			i_wb_addr;
-	input		[31:0]	i_wb_data;
+	input	wire		i_wb_cyc, i_wb_stb, i_wb_we;
+	input	wire		i_wb_addr;
+	input	wire	[31:0]	i_wb_data;
 	//
 	output	wire		o_wb_ack;
 	output	wire		o_wb_stall;
 	output	wire	[31:0]	o_wb_data;
 	//
-	output	o_interrupt;
+	output	wire		o_interrupt;
 
 	reg	[30:0]	counter;
 	initial	counter = 0;
