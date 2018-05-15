@@ -495,7 +495,7 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 
 	// Make Verilator happy
 	// verilator lint_off UNUSED
-	wire	[3+5+(20-HOLDOFFBITS)-1:0] unused;
+	wire	[3+6+(20-HOLDOFFBITS)-1:0] unused;
 	assign	unused = { i_wb_data[30:28], i_wb_data[25:HOLDOFFBITS] };
 	// verilator lint_on  UNUSED
 
