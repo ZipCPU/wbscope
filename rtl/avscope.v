@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Filename: 	wbscope.v
+// Filename: 	avscope.v
 //
 // Project:	WBScope, a wishbone hosted scope
 //
@@ -54,6 +54,9 @@
 //	bw_	A wire/net, controlled by the bus clock
 //	dw_	A wire/net, controlled by the data clock
 //
+// This particular version is designed to use an Avalon bus interface, instead
+// of a wishbone interface.
+//
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
 //
@@ -83,12 +86,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
+`ifdef	VERILATOR
 `default_nettype	none
+`endif
 //
-module wbscope(i_data_clk, i_ce, i_trigger, i_data,
-	i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
-	o_wb_ack, o_wb_stall, o_wb_data,
-	o_interrupt);
+module avscope(i_data_clk, i_ce, i_trigger, i_data,
+	i_av_clk, i_av_reset, i_av_read, i_av_write, i_av_addr, i_av_writedata,
+	o_av_readresponse, o_av_writeresponse, o_av_response, o_av_readdata,
+	o_irq);
 	parameter [4:0]			LGMEM = 5'd10;
 	parameter			BUSW = 32;
 	parameter [0:0]			SYNCHRONOUS=1;
@@ -98,18 +103,24 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	input	wire			i_data_clk, i_ce, i_trigger;
 	input	wire	[(BUSW-1):0]	i_data;
 	// The WISHBONE bus for reading and configuring this scope
-	input	wire			i_wb_clk, i_wb_cyc, i_wb_stb, i_wb_we;
-	input	wire			i_wb_addr; // One address line only
-	input	wire	[(BUSW-1):0]	i_wb_data;
-	output	wire			o_wb_ack, o_wb_stall;
-	output	wire	[(BUSW-1):0]	o_wb_data;
+	input	wire			i_av_clk, i_av_reset, i_av_read, i_av_write;
+	input	wire			i_av_addr; // One address line only
+	input	wire	[(BUSW-1):0]	i_av_writedata;
+	output	wire	[(BUSW-1):0]	o_av_readdata;
+	// output	wire			o_av_waitrequest;
+	//
+	output	wire			o_av_readresponse;
+	output	wire			o_av_writeresponse;
+	output	wire	[1:0]		o_av_response;
 	// And, finally, for a final flair --- offer to interrupt the CPU after
-	// our trigger has gone off.  This line is equivalent to the scope
+	// our trigger has gone off.  This line is equivalent to the scope 
 	// being stopped.  It is not maskable here.
-	output	wire			o_interrupt;
+	output	wire			o_irq;
+
+	assign	o_av_response = 2'b00;
 
 	wire	bus_clock;
-	assign	bus_clock = i_wb_clk;
+	assign	bus_clock = i_av_clk;
 
 	///////////////////////////////////////////////////
 	//
@@ -119,20 +130,20 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	///////////////////////////////////////////////////
 	//
 	//
-	assign	o_wb_stall = 1'b0;
+	// assign	o_av_waitrequest = 1'b0;
 
 	wire	read_from_data;
-	assign	read_from_data = (i_wb_stb)&&(!i_wb_we)&&(i_wb_addr);
+	assign	read_from_data = (i_av_read)&&(i_av_addr);
 
 	wire	write_stb;
-	assign	write_stb = (i_wb_stb)&&(i_wb_we);
+	assign	write_stb = (i_av_write);
 
 	wire	write_to_control;
-	assign	write_to_control = (write_stb)&&(!i_wb_addr);
+	assign	write_to_control = (i_av_write)&&(!i_av_addr);
 
 	reg	read_address;
 	always @(posedge bus_clock)
-		read_address <= i_wb_addr;
+		read_address <= i_av_addr;
 
 	reg	[(LGMEM-1):0]	raddr;
 	reg	[(BUSW-1):0]	mem[0:((1<<LGMEM)-1)];
@@ -147,10 +158,10 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	always @(posedge bus_clock)
 		if (write_to_control)
 		begin
-			br_config <= { i_wb_data[31],
-				i_wb_data[27],
-				i_wb_data[26] };
-			br_holdoff <= i_wb_data[(HOLDOFFBITS-1):0];
+			br_config <= { i_av_writedata[31],
+				i_av_writedata[27],
+				i_av_writedata[26] };
+			br_holdoff <= i_av_writedata[(HOLDOFFBITS-1):0];
 		end else if (bw_reset_complete)
 			br_config[2] <= 1'b1;
 	assign	bw_reset_request   = (!br_config[2]);
@@ -167,7 +178,7 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 		assign	bw_reset_complete = bw_reset_request;
 	end else begin
 		reg		r_reset_complete;
-		(* ASYNC_REG = "TRUE" *) reg	[2:0]	q_iflags;
+		reg	[2:0]	q_iflags;
 		reg	[2:0]	r_iflags;
 
 		// Resets are synchronous to the bus clock, not the data clock
@@ -185,7 +196,7 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 		assign	dw_manual_trigger = r_iflags[1];
 		assign	dw_disable_trigger = r_iflags[0];
 
-		(* ASYNC_REG = "TRUE" *) reg	q_reset_complete;
+		reg	q_reset_complete;
 		reg	qq_reset_complete;
 		// Pass an acknowledgement back from the data clock to the bus
 		// clock that the reset has been accomplished
@@ -223,7 +234,7 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	//
 	// Writes take place on the data clock
 	// The counter is unsigned
-	(* ASYNC_REG="TRUE" *) reg	[(HOLDOFFBITS-1):0]	counter;
+	reg	[(HOLDOFFBITS-1):0]	counter;
 
 	reg		dr_stopped;
 	initial	dr_stopped = 1'b0;
@@ -318,7 +329,7 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 		// for many clocks.  Swapping is thus easy--two flip flops to
 		// protect against meta-stability and we're done.
 		//
-		(* ASYNC_REG = "TRUE" *) reg	[2:0]	q_oflags;
+		reg	[2:0]	q_oflags;
 		reg	[2:0]	r_oflags;
 		initial	q_oflags = 3'h0;
 		initial	r_oflags = 3'h0;
@@ -338,12 +349,12 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	end endgenerate
 
 	// Reads use the bus clock
-	reg	br_wb_ack, br_pre_wb_ack;
-	initial	br_wb_ack = 1'b0;
-	wire	bw_cyc_stb;
-	assign	bw_cyc_stb = (i_wb_stb);
-	initial	br_pre_wb_ack = 1'b0;
-	initial	br_wb_ack = 1'b0;
+	reg	br_av_rdack, br_pre_av_rdack;
+	reg	br_av_wrack, br_pre_av_wrack;
+	initial	br_pre_av_rdack = 1'b0;
+	initial	br_pre_av_wrack = 1'b0;
+	initial	br_av_rdack = 1'b0;
+	initial	br_av_wrack = 1'b0;
 	always @(posedge bus_clock)
 	begin
 		if ((bw_reset_request)||(write_to_control))
@@ -351,10 +362,14 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 		else if ((read_from_data)&&(bw_stopped))
 			raddr <= raddr + 1'b1; // Data read, when stopped
 
-		br_pre_wb_ack <= bw_cyc_stb;
-		br_wb_ack <= (br_pre_wb_ack)&&(i_wb_cyc);
+		br_pre_av_rdack <= i_av_read;
+		br_av_rdack <= (br_pre_av_rdack);
+		//
+		br_pre_av_wrack <= i_av_write;
+		br_av_wrack <= (br_pre_av_wrack);
 	end
-	assign	o_wb_ack = (i_wb_cyc)&&(br_wb_ack);
+	assign	o_av_writeresponse = (br_av_wrack);
+	assign	o_av_readresponse  = (br_av_rdack);
 
 	reg	[(LGMEM-1):0]	this_addr;
 	always @(posedge bus_clock)
@@ -392,11 +407,11 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 		else // if (i_wb_addr) // Read from FIFO memory
 			o_bus_data <= nxt_mem; // mem[raddr+waddr];
 
-	assign	o_wb_data = o_bus_data;
+	assign	o_av_readdata = o_bus_data;
 
 	reg	br_level_interrupt;
 	initial	br_level_interrupt = 1'b0;
-	assign	o_interrupt = (bw_stopped)&&(!bw_disable_trigger)
+	assign	o_irq = (bw_stopped)&&(!bw_disable_trigger)
 					&&(!br_level_interrupt);
 	always @(posedge bus_clock)
 		if ((bw_reset_complete)||(bw_reset_request))
@@ -407,6 +422,6 @@ module wbscope(i_data_clk, i_ce, i_trigger, i_data,
 	// verilator lint_off UNUSED
 	// Make verilator happy
 	wire	[28:0]	unused;
-	assign unused = { i_wb_data[30:28], i_wb_data[25:0] };
+	assign unused = { i_av_writedata[30:28], i_av_writedata[25:0] };
 	// verilator lint_on UNUSED
 endmodule
