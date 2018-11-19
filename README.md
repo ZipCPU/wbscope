@@ -41,6 +41,12 @@ bounces](http://zipcpu.com/blog/2017/08/02/debounce-teaser.html),
 with the short discussion of how to set it up for that task
 [here](http://zipcpu.com/blog/2017/08/07/bounce-dbgbus.html).
 
+# Interfaces supported
+
+1. [Wishbone B4/pipelined](rtl/wbscope.v)
+2. [AXI lite](rtl/axi4lscope.v)
+3. [Avalon](rtl/avscope.v)
+
 # Commercial Applications
 
 Should you find the GPLv3 license insufficient for your needs, other licenses

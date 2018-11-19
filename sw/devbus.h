@@ -5,9 +5,16 @@
 // Project:	OpenArty, an entirely open SoC based upon the Arty platform
 //
 // Purpose:	The purpose of this file is to document an interface which
-//		any devic with a bus, whether it be implemented over a UART,
-//	an ethernet, or a PCI express bus, must implement.  This describes only
-//	an interface, and not how that interface is to be accomplished.
+//		any device with a bus, whether it be implemented over a UART,
+//	an ethernet, or a PCI express bus, must implement.  This describes
+//	only an interface, and not how that interface is to be accomplished.
+//
+//	The neat part of this interface is that, if programs are designed to
+//	work with it, than the implementation details may be changed later
+//	and any program that once worked with the interface should be able
+//	to continue to do so.  (i.e., switch from a UART controlled bus to a
+//	PCI express controlled bus, with minimal change to the software of
+//	interest.)
 //
 //
 // Creator:	Dan Gisselquist, Ph.D.

@@ -187,13 +187,11 @@ module axi4lscope
 	// AXI4LITE signals
 	reg [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_awaddr;
 	reg			 	axi_awready;
-	reg 				axi_wready;
 	// reg		[1 : 0] 	axi_bresp;
 	reg 				axi_bvalid;
 	reg [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_araddr;
 	reg 			 	axi_arready;
 	// reg		 [1 : 0] 	axi_rresp;
-	reg  				axi_rvalid;
 
 
 	wire	write_stb;
@@ -214,74 +212,67 @@ module axi4lscope
 	// Gisselquist Technology, LLC, claims no copyright
 	// or ownership of this section of the code.
 	//
-	wire	i_reset;
+	wire	i_reset, axi_bstall, axi_rstall;
 	assign	i_reset = !S_AXI_ARESETN;
 
-	always @(posedge S_AXI_ACLK)
-		if (i_reset)
-			axi_awready <= 1'b0;
-		else if ((!axi_awready)&&(S_AXI_AWVALID)&&(S_AXI_WVALID))
-			axi_awready <= 1'b1;
-		else
-			axi_awready <= 1'b0;
+	always @(*)
+	if ((!axi_bstall)&&(S_AXI_AWVALID)&&(S_AXI_WVALID))
+		axi_awready <= 1'b1;
+	else
+		axi_awready <= 1'b0;
 	assign	S_AXI_AWREADY = axi_awready;
+	assign	S_AXI_WREADY = axi_awready;
 
 	always @(posedge S_AXI_ACLK)
-		if ((!axi_awready)&&(S_AXI_AWVALID)&&(S_AXI_WVALID))
-			axi_awaddr <= S_AXI_AWADDR;
+	if ((S_AXI_AWVALID)&&(S_AXI_AWREADY))
+		axi_awaddr <= S_AXI_AWADDR;
 
+	initial	axi_bvalid = 0;
 	always @(posedge S_AXI_ACLK)
-		if (i_reset)
-			axi_wready <= 1'b0;
-		else if ((!axi_wready)&&(S_AXI_WVALID)&&(S_AXI_AWVALID))
-			axi_wready <= 1'b1;
-		else
-			axi_wready <= 1'b0;
-	assign	S_AXI_WREADY = axi_wready;
-
-	always @(posedge S_AXI_ACLK)
-		if (i_reset)
-		begin
-			axi_bvalid <= 0;
-			// axi_bresp <= 2'b00;
-		end else if ((~axi_bvalid)&&(write_stb))
-		begin
-			axi_bvalid <= 1'b1;
-			// axi_bresp <= 2'b00; // 'Okay' response
-		end else if ((S_AXI_BREADY)&&(axi_bvalid))
-			axi_bvalid <= 1'b0;
+	if (i_reset)
+		axi_bvalid <= 0;
+	else if (write_stb)
+		axi_bvalid <= 1'b1;
+	else if (S_AXI_BREADY)
+		axi_bvalid <= 1'b0;
 	assign	S_AXI_BRESP = 2'b00;	// An 'OKAY' response
 	assign	S_AXI_BVALID= axi_bvalid;
 
+	assign	axi_bstall = (S_AXI_BVALID)&&(!S_AXI_BREADY);
 
+
+	always @(*)
+	if (i_reset)
+		axi_arready = 1'b0;
+	else if (axi_rstall)
+		axi_arready = 1'b0;
+	else
+		axi_arready = 1'b1;
 
 	always @(posedge S_AXI_ACLK)
-		if (i_reset)
-		begin
-			axi_arready <= 1'b0;
-			axi_araddr <= 0;
-		end else if ((!axi_arready)&&(S_AXI_ARVALID))
-		begin
-			axi_arready <= 1'b1;
-			axi_araddr <= S_AXI_ARADDR;
-		end else
-			axi_arready <= 1'b0;
+	if (i_reset)
+		axi_araddr <= 0;
+	else if ((axi_arready)&&(S_AXI_ARVALID))
+		axi_araddr <= S_AXI_ARADDR;
+
 	assign	S_AXI_ARREADY = axi_arready;
 
+	reg	[1:0]	rvalid;
+	initial	rvalid = 2'b00;
 	always @(posedge S_AXI_ACLK)
-		if (i_reset)
-		begin
-			axi_rvalid <= 0;
-			// axi_rresp  <= 0;
-		end else if ((axi_arready)&&(S_AXI_ARVALID)&&(!axi_rvalid))
-		begin
-			axi_rvalid <= 1'b0;
-			// axi_rresp <= 2'b00;
-		end else if ((axi_rvalid)&&(S_AXI_RREADY))
-			axi_rvalid <= 1'b0;
-	assign	S_AXI_RVALID = axi_rvalid;
+	if (i_reset)
+		rvalid <= 2'b00;
+	else if ((axi_arready)&&(S_AXI_ARVALID))
+		rvalid <= 2'b01;
+	else if (rvalid == 2'b01)
+		rvalid <= 2'b10;
+	else if (S_AXI_RREADY)
+		rvalid <= 2'b00;
+
+	assign	S_AXI_RVALID = rvalid[1];
 	assign	S_AXI_RRESP  = 2'b00;
 
+	assign	axi_rstall = ((rvalid[0])||(S_AXI_RVALID)&&(!S_AXI_RREADY));
 
 
 
@@ -314,12 +305,13 @@ module axi4lscope
 					&&(axi_araddr[0]);
 
 	assign	write_stb = ((axi_awready)&&(S_AXI_AWVALID)
-				&&(axi_wready)&&(S_AXI_WVALID));
+				&&(S_AXI_WVALID));
 	wire	write_to_control;
 	assign	write_to_control = (write_stb)&&(!axi_awaddr[0]);
 
 	reg	read_address;
 	always @(posedge bus_clock)
+	if ((axi_arready)&&(S_AXI_ARVALID))
 		read_address <= axi_araddr[0];
 
 	wire	[31:0]	i_wb_data;
@@ -352,14 +344,14 @@ module axi4lscope
 	initial	br_config = 3'b0;
 	initial	br_holdoff = DEFAULT_HOLDOFF;
 	always @(posedge bus_clock)
-		if (write_to_control)
-		begin
-			br_config <= { i_wb_data[31],
-				i_wb_data[27],
-				i_wb_data[26] };
-			br_holdoff <= i_wb_data[(HOLDOFFBITS-1):0];
-		end else if (bw_reset_complete)
-			br_config[2] <= 1'b1;
+	if (write_to_control)
+	begin
+		br_config <= { i_wb_data[31],
+			i_wb_data[27],
+			i_wb_data[26] };
+		br_holdoff <= i_wb_data[(HOLDOFFBITS-1):0];
+	end else if (bw_reset_complete)
+		br_config[2] <= 1'b1;
 	assign	bw_reset_request   = (!br_config[2]);
 	assign	bw_manual_trigger  = (br_config[1]);
 	assign	bw_disable_trigger = (br_config[0]);
@@ -379,7 +371,7 @@ module axi4lscope
 
 		// Resets are synchronous to the bus clock, not the data clock
 		// so do a clock transfer here
-		initial	q_iflags = 3'b000;
+		initial	{ q_iflags, r_iflags } = 6'h0;
 		initial	r_reset_complete = 1'b0;
 		always @(posedge i_data_clk)
 		begin
@@ -405,6 +397,15 @@ module axi4lscope
 		end
 
 		assign bw_reset_complete = qq_reset_complete;
+
+`ifdef	FORMAL
+		always @($global_clock)
+		if (f_past_valid_data)
+		begin
+			if ($rose(r_reset_complete))
+				assert(bw_reset_request);
+		end
+`endif
 	end endgenerate
 
 	//
@@ -420,10 +421,10 @@ module axi4lscope
 				||(dw_manual_trigger));
 	initial	dr_triggered = 1'b0;
 	always @(posedge i_data_clk)
-		if (dw_reset)
-			dr_triggered <= 1'b0;
-		else if ((i_ce)&&(dw_trigger))
-			dr_triggered <= 1'b1;
+	if (dw_reset)
+		dr_triggered <= 1'b0;
+	else if ((i_ce)&&(dw_trigger))
+		dr_triggered <= 1'b1;
 
 	//
 	// Determine when memory is full and capture is complete
@@ -436,19 +437,18 @@ module axi4lscope
 	initial	dr_stopped = 1'b0;
 	initial	counter = 0;
 	always @(posedge i_data_clk)
-		if (dw_reset)
-			counter <= 0;
-		else if ((i_ce)&&(dr_triggered)&&(!dr_stopped))
-		begin
-			counter <= counter + 1'b1;
-		end
+	if (dw_reset)
+		counter <= 0;
+	else if ((i_ce)&&(dr_triggered)&&(!dr_stopped))
+		counter <= counter + 1'b1;
+
 	always @(posedge i_data_clk)
-		if ((!dr_triggered)||(dw_reset))
-			dr_stopped <= 1'b0;
-		else if (HOLDOFFBITS > 1) // if (i_ce)
-			dr_stopped <= (counter >= br_holdoff);
-		else if (HOLDOFFBITS <= 1)
-			dr_stopped <= ((i_ce)&&(dw_trigger));
+	if ((!dr_triggered)||(dw_reset))
+		dr_stopped <= 1'b0;
+	else if (HOLDOFFBITS > 1) // if (i_ce)
+		dr_stopped <= (counter >= br_holdoff);
+	else if (HOLDOFFBITS <= 1)
+		dr_stopped <= ((i_ce)&&(dw_trigger));
 
 	//
 	//	Actually do our writes to memory.  Record, via 'primed' when
@@ -464,23 +464,23 @@ module axi4lscope
 	initial	waddr = {(LGMEM){1'b0}};
 	initial	dr_primed = 1'b0;
 	always @(posedge i_data_clk)
-		if (dw_reset) // For simulation purposes, supply a valid value
+	if (dw_reset) // For simulation purposes, supply a valid value
+	begin
+		waddr <= 0; // upon reset.
+		dr_primed <= 1'b0;
+	end else if ((i_ce)&&(!dr_stopped))
+	begin
+		// mem[waddr] <= i_data;
+		waddr <= waddr + {{(LGMEM-1){1'b0}},1'b1};
+		if (!dr_primed)
 		begin
-			waddr <= 0; // upon reset.
-			dr_primed <= 1'b0;
-		end else if ((i_ce)&&(!dr_stopped))
-		begin
-			// mem[waddr] <= i_data;
-			waddr <= waddr + {{(LGMEM-1){1'b0}},1'b1};
-			if (!dr_primed)
-			begin
-				//if (br_holdoff[(HOLDOFFBITS-1):LGMEM]==0)
-				//	dr_primed <= (waddr >= br_holdoff[(LGMEM-1):0]);
-				// else
-				
-					dr_primed <= (&waddr);
-			end
+			//if (br_holdoff[(HOLDOFFBITS-1):LGMEM]==0)
+			//	dr_primed <= (waddr >= br_holdoff[(LGMEM-1):0]);
+			// else
+			
+				dr_primed <= (&waddr);
 		end
+	end
 
 	// Delay the incoming data so that we can get our trigger
 	// logic to line up with the data.  The goal is to have a
@@ -551,6 +551,7 @@ module axi4lscope
 	end endgenerate
 
 	// Reads use the bus clock
+	initial	raddr = 0;
 	always @(posedge bus_clock)
 	begin
 		if ((bw_reset_request)||(write_to_control))
@@ -561,13 +562,14 @@ module axi4lscope
 
 	reg	[(LGMEM-1):0]	this_addr;
 	always @(posedge bus_clock)
-		if (read_from_data)
-			this_addr <= raddr + waddr + 1'b1;
-		else
-			this_addr <= raddr + waddr;
+	if ((bw_stopped)&&(read_from_data))
+		this_addr <= raddr + waddr + 1'b1;
+	else
+		this_addr <= raddr + waddr;
 
 	reg	[31:0]	nxt_mem;
 	always @(posedge bus_clock)
+	if (read_from_data)
 		nxt_mem <= mem[this_addr];
 
 	wire	[19:0]	full_holdoff;
@@ -580,6 +582,8 @@ module axi4lscope
 	wire	[4:0]	bw_lgmem;
 	assign		bw_lgmem = LGMEM;
 	always @(posedge bus_clock)
+	if (rvalid[0])
+	begin
 		if (!read_address) // Control register read
 			o_bus_data <= { bw_reset_request,
 					bw_stopped,
@@ -594,6 +598,7 @@ module axi4lscope
 			o_bus_data <= i_data;
 		else // if (i_wb_addr) // Read from FIFO memory
 			o_bus_data <= nxt_mem; // mem[raddr+waddr];
+	end
 
 	assign	S_AXI_RDATA = o_bus_data;
 
@@ -602,10 +607,10 @@ module axi4lscope
 	assign	o_interrupt = (bw_stopped)&&(!bw_disable_trigger)
 					&&(!br_level_interrupt);
 	always @(posedge bus_clock)
-		if ((bw_reset_complete)||(bw_reset_request))
-			br_level_interrupt<= 1'b0;
-		else
-			br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
+	if ((bw_reset_complete)||(bw_reset_request))
+		br_level_interrupt<= 1'b0;
+	else
+		br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
 
 	// verilator lint_off UNUSED
 	// Make verilator happy
@@ -614,4 +619,220 @@ module axi4lscope
 		axi_awaddr[3:1], axi_araddr[3:1],
 		i_wb_data[30:28], i_wb_data[25:0] };
 	// verilator lint_on UNUSED
+`ifdef	FORMAL
+	generate if (SYNCHRONOUS)
+	begin
+
+		always @(*)
+			assume(i_data_clk == S_AXI_ACLK);
+
+	end else begin
+		localparam	CKSTEP_BITS = 3;
+		localparam [CKSTEP_BITS-1:0]
+				MAX_STEP = { 1'b0, {(CKSTEP_BITS-1){1'b1}} };
+
+		// "artificially" generate two clocks
+`ifdef	VERIFIC
+		(* gclk *) wire gbl_clock;
+		global clocking @(posedge gbl_clock); endclocking
+`endif
+
+		(* anyconst *) wire [CKSTEP_BITS-1:0] f_data_step, f_bus_step;
+		reg	[CKSTEP_BITS-1:0]	f_data_count, f_bus_count;
+
+		always @(*)
+		begin
+			assume(f_data_step > 0);
+			assume(f_bus_step  > 0);
+			assume(f_data_step <= MAX_STEP);
+			assume(f_bus_step  <= MAX_STEP);
+
+			assume((f_data_step == MAX_STEP)
+				||(f_bus_step == MAX_STEP));
+		end
+
+		always @($global_clock)
+		begin
+			f_data_count <= f_data_count + f_data_step;
+			f_bus_count  <= f_bus_count  + f_bus_step;
+
+			assume(i_data_clk  == f_data_count[CKSTEP_BITS-1]);
+			assume(bus_clock   == f_bus_count[CKSTEP_BITS-1]);
+		end
+
+		always @($global_clock)
+		if (!$rose(i_data_clk))
+		begin
+			assume($stable(i_trigger));
+			assume($stable(i_data));
+		end
+
+		always @($global_clock)
+		if (!$rose(S_AXI_ACLK))
+		begin
+			assume($stable(S_AXI_ARESETN));
+			//
+			assume($stable(S_AXI_AWADDR));
+			assume($stable(S_AXI_AWPROT));
+			assume($stable(S_AXI_AWVALID));
+			//
+			assume($stable(S_AXI_WDATA));
+			assume($stable(S_AXI_WSTRB));
+			assume($stable(S_AXI_WVALID));
+			//
+			assume($stable(S_AXI_BREADY));
+			//
+			assume($stable(S_AXI_ARADDR));
+			assume($stable(S_AXI_ARPROT));
+			assume($stable(S_AXI_ARVALID));
+			//
+			assume($stable(S_AXI_RREADY));
+			//
+		end
+
+	end endgenerate
+
+	reg	f_past_valid_bus, f_past_valid_gbl, f_past_valid_data;
+	initial { f_past_valid_bus, f_past_valid_gbl, f_past_valid_data }= 3'b0;
+	always @(posedge S_AXI_ACLK)
+		f_past_valid_bus = 1'b1;
+
+	generate if (!SYNCHRONOUS)
+	begin
+		always @($global_clock)
+			f_past_valid_gbl <= 1'b1;
+
+		always @(posedge i_data_clk)
+			f_past_valid_data = 1'b1;
+
+		always @(posedge i_data_clk)
+		if (f_past_valid_data)
+			assert($stable(o_interrupt));
+
+		always @($global_clock)
+		if ((f_past_valid_gbl)&&(!$rose(S_AXI_ACLK)))
+		begin
+			assert($stable(S_AXI_AWREADY));
+			assert($stable(S_AXI_ARREADY));
+			assert($stable(S_AXI_RDATA));
+			assert($stable(S_AXI_RRESP));
+			assert($stable(S_AXI_RVALID));
+			assert($stable(S_AXI_WREADY));
+			assert($stable(S_AXI_BRESP));
+			assert($stable(S_AXI_BVALID));
+		end
+
+	end else begin
+
+		always @(*)
+			f_past_valid_data = f_past_valid_bus;
+		always @(*)
+			f_past_valid_gbl  = f_past_valid_bus;
+
+	end endgenerate
+
+	localparam	F_LGDEPTH = 5;
+	wire	[F_LGDEPTH-1:0]	f_axi_rd_outstanding,
+				f_axi_wr_outstanding,
+				f_axi_awr_outstanding;
+
+	faxil_slave #(
+		// .C_S_AXI_DATA_WIDth(C_S_AXI_DATA_WIDTH),
+		// Width of S_AXI address bus
+		.C_AXI_ADDR_WIDTH(C_S_AXI_ADDR_WIDTH),
+		.F_LGDEPTH(F_LGDEPTH),
+		.F_OPT_HAS_CACHE(1'b0),
+		// .F_OPT_CLK2FFLOGIC(!SYNCHRONOUS),
+		.F_AXI_MAXWAIT(5'h6),
+		.F_AXI_MAXDELAY(5'h6),
+		) faxil_slave(
+			.i_clk(S_AXI_ACLK),
+			.i_axi_reset_n(S_AXI_ARESETN),
+			//
+			.i_axi_awaddr(S_AXI_AWADDR),
+			.i_axi_awprot(S_AXI_AWPROT),
+			.i_axi_awcache(4'h0),
+			.i_axi_awvalid(S_AXI_AWVALID),
+			.i_axi_awready(S_AXI_AWREADY),
+			//
+			.i_axi_wdata(S_AXI_WDATA),
+			.i_axi_wstrb(S_AXI_WSTRB),
+			.i_axi_wvalid(S_AXI_WVALID),
+			.i_axi_wready(S_AXI_WREADY),
+			//
+			.i_axi_bresp(S_AXI_BRESP),
+			.i_axi_bvalid(S_AXI_BVALID),
+			.i_axi_bready(S_AXI_BREADY),
+			//
+			.i_axi_araddr(S_AXI_ARADDR),
+			.i_axi_arprot(S_AXI_ARPROT),
+			.i_axi_arvalid(S_AXI_ARVALID),
+			.i_axi_arready(S_AXI_ARREADY),
+			.i_axi_arcache(4'h0),
+			//
+			.i_axi_rdata(S_AXI_RDATA),
+			.i_axi_rresp(S_AXI_RRESP),
+			.i_axi_rvalid(S_AXI_RVALID),
+			.i_axi_rready(S_AXI_RREADY),
+			//
+			.f_axi_rd_outstanding(f_axi_rd_outstanding),
+			.f_axi_wr_outstanding(f_axi_wr_outstanding),
+			.f_axi_awr_outstanding(f_axi_awr_outstanding));
+
+	always @(*)
+	begin
+		assert(f_axi_wr_outstanding == f_axi_awr_outstanding);
+		if (axi_bvalid)
+			assert(f_axi_wr_outstanding == 1);
+		else
+			assert(f_axi_wr_outstanding == 0);
+		if (|rvalid)
+			assert(f_axi_rd_outstanding == 1);
+		else
+			assert(f_axi_rd_outstanding == 0);
+		assert(rvalid != 2'b11);
+	end
+
+	always @(*)
+	if (dr_triggered)
+		assert(dr_primed);
+
+	always @(*)
+	if (dr_stopped)
+		assert((dr_primed)&&(dr_triggered));
+
+	reg	dr_triggered, dr_primed;
+	wire	dw_trigger;
+	assign	dw_trigger = (dr_primed)&&(
+				((i_trigger)&&(!dw_disable_trigger))
+				||(dw_manual_trigger));
+
+	(* anyconst *)	wire	[(LGMEM-1):0]	f_addr;
+	reg	[31:0]	f_data;
+	reg		f_filled;
+
+	initial	f_filled = 1'b0;
+	always @(posedge i_data_clk)
+	if (dw_reset)
+		f_filled <= 1'b0;
+	else if ((i_ce)&&(!dr_stopped)&&(waddr == f_addr))
+		f_filled <= 1'b1;
+
+	always @(posedge i_data_clk)
+	if (waddr > f_addr)
+		assert(f_filled);
+
+	always @(posedge i_data_clk)
+	if (!f_filled)
+		assert(!dr_primed);
+
+	always @(posedge i_data_clk)
+	if ((i_ce)&&(!dr_stopped)&&(waddr == f_addr))
+		f_data <= wr_piped_data;
+
+	always @(posedge i_data_clk)
+	if (f_filled)
+		assert(mem[f_addr] == f_data);
+
+`endif
 endmodule
