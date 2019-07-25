@@ -1,0 +1,26 @@
+[tasks]
+sync
+async
+
+[options]
+mode prove
+sync:  depth 5
+async: depth 35
+async: multiclock on 
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal axilscope.v
+read -formal faxil_slave.v
+--pycode-begin--
+cmd = "hierarchy -top axilscope"
+cmd += " -chparam SYNCHRONOUS %d" % (0 if "async" in tags else 1)
+output(cmd)
+--pycode-end--
+prep -top axilscope
+
+[files]
+faxil_slave.v
+../../rtl/axilscope.v

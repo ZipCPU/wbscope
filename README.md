@@ -44,7 +44,7 @@ with the short discussion of how to set it up for that task
 # Interfaces supported
 
 1. [Wishbone B4/pipelined](rtl/wbscope.v)
-2. [AXI lite](rtl/axi4lscope.v)
+2. [AXI lite](rtl/axilscope.v)
 3. [Avalon](rtl/avscope.v)
 
 # Commercial Applications

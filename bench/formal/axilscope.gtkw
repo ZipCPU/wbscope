@@ -1,0 +1,126 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Sun Nov 18 21:12:59 2018
+[*]
+[dumpfile] "/home/dan/jericho/work/rnd/opencores/wbscope/trunk/bench/formal/axilscope/engine_0/trace.vcd"
+[dumpfile_mtime] "Sun Nov 18 21:12:49 2018"
+[dumpfile_size] 48964
+[savefile] "/home/dan/jericho/work/rnd/opencores/wbscope/trunk/bench/formal/axil4scope.gtkw"
+[timestart] 0
+[size] 1883 600
+[pos] -1 -1
+*-6.054117 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 270
+[signals_width] 220
+[sst_expanded] 1
+[sst_vpaned_height] 143
+@28
+axilscope.S_AXI_ARESETN
+axilscope.S_AXI_ACLK
+@200
+-
+@28
+axilscope.S_AXI_AWVALID
+axilscope.S_AXI_AWREADY
+@22
+axilscope.S_AXI_AWADDR[3:0]
+@28
+axilscope.S_AXI_AWPROT[2:0]
+@200
+-
+@28
+axilscope.S_AXI_WVALID
+axilscope.S_AXI_WREADY
+@22
+axilscope.S_AXI_WDATA[31:0]
+axilscope.S_AXI_WSTRB[3:0]
+@200
+-
+@28
+axilscope.S_AXI_BREADY
+axilscope.S_AXI_BRESP[1:0]
+axilscope.S_AXI_BVALID
+@200
+-
+@28
+axilscope.S_AXI_ARVALID
+axilscope.S_AXI_ARREADY
+@22
+axilscope.S_AXI_ARADDR[3:0]
+@28
+axilscope.S_AXI_ARPROT[2:0]
+@200
+-
+@28
+axilscope.S_AXI_RVALID
+axilscope.S_AXI_RREADY
+@22
+axilscope.S_AXI_RDATA[31:0]
+@28
+axilscope.S_AXI_RRESP[1:0]
+@200
+-
+@28
+axilscope.bus_clock
+axilscope.i_ce
+@22
+axilscope.i_data[31:0]
+@28
+axilscope.i_data_clk
+axilscope.i_trigger
+@22
+axilscope.i_wb_data[31:0]
+@200
+-
+@28
+axilscope.bw_reset_complete
+axilscope.bw_reset_request
+axilscope.br_config[2:0]
+@22
+axilscope.br_holdoff[19:0]
+@23
+axilscope.o_bus_data[31:0]
+@29
+axilscope.o_interrupt
+@28
+axilscope.br_level_interrupt
+axilscope.bw_disable_trigger
+axilscope.bw_manual_trigger
+axilscope.bw_primed
+axilscope.bw_stopped
+axilscope.bw_triggered
+@22
+axilscope.counter[19:0]
+axilscope.data_pipe[31:0]
+@28
+axilscope.dr_primed
+axilscope.dr_stopped
+axilscope.dr_triggered
+axilscope.dw_disable_trigger
+axilscope.dw_manual_trigger
+axilscope.dw_reset
+axilscope.dw_trigger
+@22
+axilscope.full_holdoff[19:0]
+axilscope.mem<000>[31:0]
+axilscope.mem<001>[31:0]
+axilscope.mem<002>[31:0]
+axilscope.mem<003>[31:0]
+axilscope.mem<004>[31:0]
+axilscope.mem<005>[31:0]
+axilscope.mem<006>[31:0]
+axilscope.mem<007>[31:0]
+axilscope.nxt_mem[31:0]
+axilscope.raddr[9:0]
+@28
+axilscope.read_address
+axilscope.read_from_data
+@22
+axilscope.this_addr[9:0]
+axilscope.waddr[9:0]
+axilscope.wr_piped_data[31:0]
+@28
+axilscope.write_stb
+axilscope.write_to_control
+[pattern_trace] 1
+[pattern_trace] 0
