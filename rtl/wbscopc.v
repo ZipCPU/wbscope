@@ -43,7 +43,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2015,2017, Gisselquist Technology, LLC
+// Copyright (C) 2015,2017-2019, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -488,10 +488,10 @@ module wbscopc(i_data_clk, i_ce, i_trigger, i_data,
 	assign	o_interrupt = (bw_stopped)&&(!bw_disable_trigger)
 					&&(!br_level_interrupt);
 	always @(posedge i_wb_clk)
-		if ((bw_reset_complete)||(bw_reset_request))
-			br_level_interrupt<= 1'b0;
-		else
-			br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
+	if ((bw_reset_complete)||(bw_reset_request))
+		br_level_interrupt<= 1'b0;
+	else
+		br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
 
 	// Make Verilator happy
 	// verilator lint_off UNUSED
