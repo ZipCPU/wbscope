@@ -47,7 +47,7 @@ VDIRFB:= $(FBDIR)/obj_dir
 test: $(VDIRFB)/Vwbscope__ALL.a
 test: $(VDIRFB)/Vwbscopc__ALL.a
 .PHONY: axi
-axi: $(VDIRFB)/Vaxi4lscope__ALL.a
+axi: $(VDIRFB)/Vaxilscope__ALL.a
 
 $(VDIRFB)/Vwbscope__ALL.a: $(VDIRFB)/Vwbscope.h $(VDIRFB)/Vwbscope.cpp
 $(VDIRFB)/Vwbscope__ALL.a: $(VDIRFB)/Vwbscope.mk

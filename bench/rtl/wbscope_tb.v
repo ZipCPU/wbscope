@@ -49,9 +49,9 @@ module	wbscope_tb(i_clk,
 		// counter, i_trigger is given externally
 		i_trigger, o_data,
 		// Wishbone bus interaction
-		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
+		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data, i_wb_sel,
 		//	wishbone bus outputs
-		o_wb_ack, o_wb_stall, o_wb_data,
+		o_wb_stall, o_wb_ack, o_wb_data,
 		// And our output interrupt
 		o_interrupt);
 	input	wire		i_clk, i_reset, i_trigger;
@@ -60,9 +60,10 @@ module	wbscope_tb(i_clk,
 	input	wire		i_wb_cyc, i_wb_stb, i_wb_we;
 	input	wire		i_wb_addr;
 	input	wire	[31:0]	i_wb_data;
+	input	wire	[3:0]	i_wb_sel;
 	//
-	output	wire		o_wb_ack;
 	output	wire		o_wb_stall;
+	output	wire		o_wb_ack;
 	output	wire	[31:0]	o_wb_data;
 	//
 	output	wire		o_interrupt;
@@ -80,14 +81,14 @@ module	wbscope_tb(i_clk,
 			.DEFAULT_HOLDOFF(1))
 		scope(i_clk, 1'b1, i_trigger, o_data,
 			i_clk, i_wb_cyc, i_wb_stb, i_wb_we,
-					i_wb_addr, i_wb_data,
-				o_wb_ack, wb_stall_ignored, o_wb_data,
+					i_wb_addr, i_wb_data, i_wb_sel,
+				wb_stall_ignored, o_wb_ack, o_wb_data,
 			o_interrupt);
 
 	assign	o_wb_stall = 1'b0;
 
 	// verilator lint_off UNUSED
-	wire	[1:0]	unused;
-	assign	unused = { i_reset, wb_stall_ignored };
+	wire	unused;
+	assign	unused = &{ 1'b0, i_reset, wb_stall_ignored };
 	// verilator lint_on UNUSED
 endmodule

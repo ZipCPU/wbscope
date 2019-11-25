@@ -15,7 +15,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2015-2017, Gisselquist Technology, LLC
+// Copyright (C) 2015-2019, Gisselquist Technology, LLC
 //
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
@@ -46,18 +46,19 @@ module	wbscopc_tb(i_clk,
 		// o_counter, i_trigger is given externally
 		i_trigger, o_data, o_counter,
 		// Wishbone bus interaction
-		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data,
+		i_wb_cyc, i_wb_stb, i_wb_we, i_wb_addr, i_wb_data, i_wb_sel,
 		//	wishbone bus outputs
-		o_wb_ack, o_wb_stall, o_wb_data,
+		o_wb_stall, o_wb_ack, o_wb_data,
 		// And our output interrupt
 		o_interrupt);
-	input			i_clk, i_reset, i_trigger;
-	output	wire	[30:0]	o_data;
+	input	wire		i_clk, i_reset, i_trigger;
+	output	reg	[30:0]	o_data;
 	output	wire	[29:0]	o_counter;
 	//
-	input			i_wb_cyc, i_wb_stb, i_wb_we;
-	input			i_wb_addr;
-	input		[31:0]	i_wb_data;
+	input	wire		i_wb_cyc, i_wb_stb, i_wb_we;
+	input	wire		i_wb_addr;
+	input	wire	[31:0]	i_wb_data;
+	input	wire	[3:0]	i_wb_sel;
 	//
 	output	wire		o_wb_ack;
 	output	wire	[31:0]	o_wb_data;
@@ -70,12 +71,13 @@ module	wbscopc_tb(i_clk,
 	always @(posedge i_clk)
 		counter <= counter + 1'b1;
 	always @(posedge i_clk)
-		if (counter[11:8] == 4'h0)
-			o_data <= { i_trigger, counter };
-		else if ((counter[10])&&(counter[1]))
-			o_data <= { i_trigger, counter };
-		else
-			o_data <= { i_trigger, counter[29:12], 12'h0 };
+	if (counter[11:8] == 4'h0)
+		o_data <= { i_trigger, counter };
+	else if ((counter[10])&&(counter[1]))
+		o_data <= { i_trigger, counter };
+	else
+		o_data <= { i_trigger, counter[29:12], 12'h0 };
+
 	assign	o_counter = counter;
 
 	wire	wb_stall_ignored;
@@ -84,15 +86,15 @@ module	wbscopc_tb(i_clk,
 			.DEFAULT_HOLDOFF(36))
 		scope(i_clk, 1'b1, i_trigger, o_data,
 			i_clk, i_wb_cyc, i_wb_stb, i_wb_we,
-					i_wb_addr, i_wb_data,
-				o_wb_ack, wb_stall_ignored, o_wb_data,
+					i_wb_addr, i_wb_data, i_wb_sel,
+				wb_stall_ignored, o_wb_ack, o_wb_data,
 			o_interrupt);
 
 	assign	o_wb_stall = 1'b0;
 
 	// Make verilator happy
 	// verilator lint_off UNUSED
-	wire	[1:0]	unused;
-	assign	unused = { i_reset, wb_stall_ignored };
+	wire	unused;
+	assign	unused = &{ 1'b0, i_reset, wb_stall_ignored };
 	// verilator lint_on  UNUSED
 endmodule
