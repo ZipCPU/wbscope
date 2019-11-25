@@ -39,9 +39,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
-module	wbscope_tb(i_clk,
-		// i_rst is required by our test infrastructure, yet unused here
-		i_rst,
+module	wbscopc_tb(i_clk,
+		// i_reset is required by test infrastructure, yet unused here
+		i_reset,
 		// The test data.  o_data is internally generated here from
 		// o_counter, i_trigger is given externally
 		i_trigger, o_data, o_counter,
@@ -51,7 +51,7 @@ module	wbscope_tb(i_clk,
 		o_wb_ack, o_wb_stall, o_wb_data,
 		// And our output interrupt
 		o_interrupt);
-	input			i_clk, i_rst, i_trigger;
+	input			i_clk, i_reset, i_trigger;
 	output	wire	[30:0]	o_data;
 	output	wire	[29:0]	o_counter;
 	//
@@ -76,6 +76,7 @@ module	wbscope_tb(i_clk,
 			o_data <= { i_trigger, counter };
 		else
 			o_data <= { i_trigger, counter[29:12], 12'h0 };
+	assign	o_counter = counter;
 
 	wire	wb_stall_ignored;
 
@@ -89,4 +90,9 @@ module	wbscope_tb(i_clk,
 
 	assign	o_wb_stall = 1'b0;
 
+	// Make verilator happy
+	// verilator lint_off UNUSED
+	wire	[1:0]	unused;
+	assign	unused = { i_reset, wb_stall_ignored };
+	// verilator lint_on  UNUSED
 endmodule

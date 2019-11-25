@@ -43,8 +43,8 @@
 `default_nettype	none
 //
 module	wbscope_tb(i_clk,
-		// i_rst is required by our test infrastructure, yet unused here
-		i_rst,
+		// i_reset is required by test infrastructure, yet unused here
+		i_reset,
 		// The test data.  o_data is internally generated here from a
 		// counter, i_trigger is given externally
 		i_trigger, o_data,
@@ -54,7 +54,7 @@ module	wbscope_tb(i_clk,
 		o_wb_ack, o_wb_stall, o_wb_data,
 		// And our output interrupt
 		o_interrupt);
-	input	wire		i_clk, i_rst, i_trigger;
+	input	wire		i_clk, i_reset, i_trigger;
 	output	wire	[31:0]	o_data;
 	//
 	input	wire		i_wb_cyc, i_wb_stb, i_wb_we;
@@ -88,6 +88,6 @@ module	wbscope_tb(i_clk,
 
 	// verilator lint_off UNUSED
 	wire	[1:0]	unused;
-	assign	unused = { i_rst, wb_stall_ignored };
+	assign	unused = { i_reset, wb_stall_ignored };
 	// verilator lint_on UNUSED
 endmodule
