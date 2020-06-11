@@ -1,3 +1,5 @@
 axilscope_async
 axilscope_sync
 faxil_slave.v
+faxi_*.v
+memscope_*/

@@ -1,0 +1,155 @@
+[*]
+[*] GTKWave Analyzer v3.3.86 (w)1999-2017 BSI
+[*] Sun May 31 23:46:18 2020
+[*]
+[timestart] 0
+[size] 1920 1021
+[pos] -1 -1
+*-6.075490 340 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] memscope.
+[sst_width] 270
+[signals_width] 220
+[sst_expanded] 1
+[sst_vpaned_height] 290
+@28
+memscope.S_AXI_ACLK
+memscope.S_AXI_ARESETN
+memscope.scope_reset
+@c00200
+-AXI-Lite Control
+@28
+memscope.S_AXIL_AWVALID
+memscope.S_AXIL_AWREADY
+@22
+memscope.S_AXIL_AWADDR[3:0]
+@28
+memscope.S_AXIL_AWPROT[2:0]
+@200
+-
+@28
+memscope.S_AXIL_WVALID
+memscope.S_AXIL_WREADY
+@22
+memscope.S_AXIL_WDATA[31:0]
+memscope.S_AXIL_WSTRB[3:0]
+@200
+-
+@28
+memscope.S_AXIL_BVALID
+memscope.S_AXIL_BREADY
+memscope.S_AXIL_BRESP[1:0]
+@200
+-
+@28
+memscope.S_AXIL_ARVALID
+memscope.S_AXIL_ARREADY
+@22
+memscope.S_AXIL_ARADDR[3:0]
+@28
+memscope.S_AXIL_ARPROT[2:0]
+@200
+-
+@28
+memscope.S_AXIL_RVALID
+memscope.S_AXIL_RREADY
+@22
+memscope.S_AXIL_RDATA[31:0]
+@28
+memscope.S_AXIL_RRESP[1:0]
+@1401200
+-AXI-Lite Control
+@28
+memscope.scope_reset
+memscope.r_busy
+memscope.s_stopped
+@22
+memscope.holdoff[19:0]
+@28
+memscope.primed
+memscope.disable_trigger
+memscope.manual_trigger
+memscope.trigger
+memscope.triggered
+memscope.r_err
+memscope.r_errcode[1:0]
+@c00200
+-AXI Stream
+@28
+memscope.i_trigger
+@22
+memscope.S_AXIS_TDATA[31:0]
+@28
+memscope.S_AXIS_TLAST
+memscope.S_AXIS_TREADY
+memscope.S_AXIS_TVALID
+@1401200
+-AXI Stream
+@c00200
+-FIFO
+@28
+memscope.sfifo.i_reset
+memscope.sfifo.i_wr
+@22
+memscope.sfifo.i_data[31:0]
+@28
+memscope.sfifo.o_full
+memscope.sfifo.i_rd
+@22
+memscope.sfifo.o_data[31:0]
+@28
+memscope.sfifo.o_empty
+@22
+memscope.sfifo.o_fill[9:0]
+@1401200
+-FIFO
+@c00200
+-Reads
+@28
+memscope.read_busy
+memscope.read_reset
+memscope.M_AXI_ARVALID
+memscope.M_AXI_ARREADY
+@22
+memscope.M_AXI_ARADDR[31:0]
+@200
+-
+@28
+memscope.M_AXI_RVALID
+memscope.M_AXI_RREADY
+@22
+memscope.M_AXI_RDATA[31:0]
+@28
+memscope.M_AXI_RRESP[1:0]
+@1401200
+-Reads
+@c00201
+-AXI Writes
+@28
+memscope.M_AXI_AWVALID
+memscope.M_AXI_AWREADY
+@22
+memscope.M_AXI_AWADDR[31:0]
+@28
+memscope.M_AXI_AWBURST[1:0]
+@22
+memscope.M_AXI_AWLEN[7:0]
+@200
+-
+@28
+memscope.M_AXI_WVALID
+memscope.M_AXI_WREADY
+@22
+memscope.M_AXI_WDATA[31:0]
+memscope.M_AXI_WSTRB[3:0]
+@28
+memscope.M_AXI_WLAST
+@200
+-
+@28
+memscope.M_AXI_BVALID
+memscope.M_AXI_BREADY
+memscope.M_AXI_BRESP[1:0]
+@1401201
+-AXI Writes
+[pattern_trace] 1
+[pattern_trace] 0

@@ -1,0 +1,30 @@
+[tasks]
+prf
+
+[options]
+prf: mode prove
+prf:  depth 10
+
+[engines]
+smtbmc
+
+[script]
+read -formal memscope.v
+read -formal skidbuffer.v
+read -formal sfifo.v
+read -formal faxil_slave.v
+# read -formal faxi_master.v
+# read -formal faxi_addr.v
+# read -formal faxi_wstrb.v
+# read -formal faxi_valaddr.v
+read -formal ../../faxi_master.v
+read -formal ../../faxi_addr.v
+read -formal ../../faxi_wstrb.v
+read -formal ../../faxi_valaddr.v
+prep -top memscope
+
+[files]
+faxil_slave.v
+../../rtl/memscope.v
+../../../../wb2axip/gitlab-axi/rtl/sfifo.v
+../../../../wb2axip/gitlab-axi/rtl/skidbuffer.v
