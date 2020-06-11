@@ -2,7 +2,7 @@
 //
 // Filename: 	memscope
 //
-// Project:	WB2AXIPSP: bus bridges and other odds and ends
+// Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	Operates with a WBScope interface, but uses a memory based AXI
 //		back end.
