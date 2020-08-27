@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	memscope
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	Operates with a WBScope interface, but uses a memory based AXI
@@ -11,7 +11,7 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
+// }}}
 // Copyright (C) 2020, Gisselquist Technology, LLC
 // {{{
 //
@@ -32,12 +32,12 @@
 //
 // License:	GPL, v3, as defined and found on www.gnu.org,
 //		http://www.gnu.org/licenses/gpl.html
-// }}}
+//
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
 `default_nettype none
-//
+// }}}
 module	memscope #(
 		// {{{
 		//
@@ -56,13 +56,6 @@ module	memscope #(
 		// isn't busy.  Otherwise, if this is set to 0, the core will
 		// force the stream to stall if ever no data is being copied.
 		parameter [0:0]	OPT_TREADY_WHILE_IDLE = 1,
-		//
-		// If the ABORT_KEY is written to the upper 8-bits of the
-		// control/status word, the current operation will be halted.
-		// Any currently active (AxVALID through xVALID & xREADY)
-		// requests will continue to completion, and the core will then
-		// come to a halt.
-		parameter [7:0]	ABORT_KEY = 8'h26,
 		//
 		// The size of the FIFO, log-based two.  Hence LGFIFO=9 gives
 		// you a FIFO of size 2^(LGFIFO) or 512 elements.  This is about
@@ -194,7 +187,6 @@ module	memscope #(
 
 
 	wire	i_clk   =  S_AXI_ACLK;
-	wire	i_reset = !S_AXI_ARESETN;
 
 	// Signal declarations
 	// {{{
@@ -273,7 +265,7 @@ module	memscope #(
 
 	skidbuffer #(.OPT_OUTREG(0), .DW(C_AXIL_ADDR_WIDTH-AXILLSB))
 	axilawskid(//
-		.i_clk(S_AXI_ACLK), .i_reset(i_reset),
+		.i_clk(S_AXI_ACLK), .i_reset(!S_AXI_ARESETN),
 		.i_valid(S_AXIL_AWVALID), .o_ready(S_AXIL_AWREADY),
 		.i_data(S_AXIL_AWADDR[C_AXIL_ADDR_WIDTH-1:AXILLSB]),
 		.o_valid(awskd_valid), .i_ready(axil_write_ready),
@@ -281,7 +273,7 @@ module	memscope #(
 
 	skidbuffer #(.OPT_OUTREG(0), .DW(C_AXIL_DATA_WIDTH+C_AXIL_DATA_WIDTH/8))
 	axilwskid(//
-		.i_clk(S_AXI_ACLK), .i_reset(i_reset),
+		.i_clk(S_AXI_ACLK), .i_reset(!S_AXI_ARESETN),
 		.i_valid(S_AXIL_WVALID), .o_ready(S_AXIL_WREADY),
 		.i_data({ S_AXIL_WDATA, S_AXIL_WSTRB }),
 		.o_valid(wskd_valid), .i_ready(axil_write_ready),
@@ -292,7 +284,7 @@ module	memscope #(
 
 	initial	axil_bvalid = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		axil_bvalid <= 0;
 	else if (axil_write_ready)
 		axil_bvalid <= 1;
@@ -310,7 +302,7 @@ module	memscope #(
 
 	skidbuffer #(.OPT_OUTREG(0), .DW(C_AXIL_ADDR_WIDTH-AXILLSB))
 	axilarskid(//
-		.i_clk(S_AXI_ACLK), .i_reset(i_reset),
+		.i_clk(S_AXI_ACLK), .i_reset(!S_AXI_ARESETN),
 		.i_valid(S_AXIL_ARVALID), .o_ready(S_AXIL_ARREADY),
 		.i_data(S_AXIL_ARADDR[C_AXIL_ADDR_WIDTH-1:AXILLSB]),
 		.o_valid(arskd_valid), .i_ready(axil_read_ready),
@@ -321,7 +313,7 @@ module	memscope #(
 
 	initial	axil_read_valid = 1'b0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		axil_read_valid <= 1'b0;
 	else if (axil_read_ready && ((arskd_addr != CMD_DATA)|| r_busy))
 		axil_read_valid <= 1'b1;
@@ -424,8 +416,8 @@ module	memscope #(
 	//
 	initial	r_busy     = 1;
 	always @(posedge i_clk)
-	if (i_reset)
-		r_busy     <= 0;
+	if (!S_AXI_ARESETN)
+		r_busy     <= 1;
 	else if (scope_reset && !r_err)
 		r_busy     <= 1;
 	else begin
@@ -444,7 +436,7 @@ module	memscope #(
 	// Generate an interrupt once we complete writing the last value.
 	initial	o_int = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		o_int <= 0;
 	else
 		o_int <= (r_busy && w_complete);
@@ -459,7 +451,7 @@ module	memscope #(
 	// errors require user intevention to clear.
 	initial	r_err = 0;
 	always @(posedge i_clk)
-	if (i_reset || (scope_reset && (!r_err || !r_busy)))
+	if (!S_AXI_ARESETN || (scope_reset && (!r_err || !r_busy)))
 		r_err <= 0;
 	else if (M_AXI_BVALID && M_AXI_BREADY && M_AXI_BRESP[1])
 		r_err <= 1'b1;
@@ -480,7 +472,7 @@ module	memscope #(
 	initial	scope_reset = 1;
 	initial	read_reset  = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 	begin
 		scope_reset     <= 1'b1;
 		read_reset      <= 0;
@@ -620,7 +612,7 @@ module	memscope #(
 	////////////////////////////////////////////////////////////////////////
 	//
 	//
-	assign	reset_fifo     = !r_busy;
+	assign	reset_fifo     = !S_AXI_ARESETN || !r_busy;
 	assign	write_to_fifo  = S_AXIS_TVALID && S_AXIS_TREADY&& !s_stopped;
 	assign	read_from_fifo = M_AXI_WVALID  && M_AXI_WREADY;
 
@@ -666,7 +658,7 @@ module	memscope #(
 	// counter.
 	initial	aw_bursts_outstanding = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 	begin
 		aw_bursts_outstanding <= 0;
 		aw_full_pipeline <= 0;
@@ -695,7 +687,7 @@ module	memscope #(
 	initial	wr_none_pending = 1;
 	initial	wr_writes_pending = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 	begin
 		wr_writes_pending <= 0;
 		wr_none_pending   <= 1;
@@ -727,24 +719,28 @@ module	memscope #(
 				||(s_stopped && (data_available != 0)
 					&& !M_AXI_WVALID);
 
+		// If the address channel is stalled, then we can't issue any
+		// new requests
+		if (M_AXI_AWVALID && !M_AXI_AWREADY)
+			w_phantom_start = 0;
+
 		// If we're still writing the last burst, then don't start
 		// any new ones
 		if (M_AXI_WVALID && (!M_AXI_WLAST || !M_AXI_WREADY))
 			w_phantom_start = 0;
 
-		if (scope_reset)
+		if (scope_reset || !r_busy)
 			w_phantom_start = 0;
 
-		// Finally, don't start any new bursts if we aren't already
-		// busy transmitting, or if we are in the process of aborting
-		// our transfer
-		if (!r_busy || phantom_start)
+		// Finally, don't start any new bursts if we aren't haven't
+		// yet adjusted our counters from the last burst
+		if (phantom_start)
 			w_phantom_start = 0;
 	end
 
 	initial	phantom_start = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		phantom_start <= 0;
 	else
 		phantom_start <= w_phantom_start;
@@ -789,7 +785,7 @@ module	memscope #(
 		if (!M_AXI_AWVALID || M_AXI_AWREADY)
 		begin
 			if (|data_available[LGFIFO:LGMAXBURST])
-				axi_awlen <= -1;
+				axi_awlen <= (1<<LGMAXBURST)-1;
 			else
 				axi_awlen  <= data_available[7:0] - 1;
 		end
@@ -804,10 +800,10 @@ module	memscope #(
 			// Verilator lint_on WIDTH
 		end
 
-		if ((!M_AXI_AWVALID || M_AXI_AWREADY) && !s_stopped)
+		if (!s_stopped)
 			axi_awaddr[LGMAXBURST+ADDRLSB-1:0] <= 0;
 
-		if (i_reset || (!r_busy && scope_reset))
+		if (!S_AXI_ARESETN || (!r_busy && scope_reset))
 			axi_awaddr <= 0;
 
 		axi_awaddr[ADDRLSB-1:0] <= 0;
@@ -822,7 +818,7 @@ module	memscope #(
 	// and allow the design to be "primed" for its trigger once again
 	initial	last_stalled = 1'b0;
 	always @(posedge i_clk)
-		last_stalled <= (!i_reset) && (S_AXIS_TVALID && !S_AXIS_TREADY);
+		last_stalled <= (S_AXI_ARESETN) && (S_AXIS_TVALID && !S_AXIS_TREADY);
 
 	always @(posedge i_clk)
 		last_tdata <= S_AXIS_TDATA;
@@ -848,7 +844,7 @@ module	memscope #(
 	// {{{
 	initial	axi_awvalid = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		axi_awvalid <= 0;
 	else if (!M_AXI_AWVALID || M_AXI_AWREADY)
 		axi_awvalid <= w_phantom_start;
@@ -858,7 +854,7 @@ module	memscope #(
 	// {{{
 	initial	axi_wvalid = 0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		axi_wvalid <= 0;
 	else if (!M_AXI_WVALID || M_AXI_WREADY)
 	begin
@@ -906,7 +902,7 @@ module	memscope #(
 	// {{{
 	initial	axi_arvalid = 1'b0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		axi_arvalid <= 0;
 	else if (!M_AXI_ARVALID || M_AXI_ARREADY)
 		axi_arvalid <= axil_read_ready && (arskd_addr == CMD_DATA)
@@ -917,7 +913,7 @@ module	memscope #(
 	// {{{
 	initial	read_busy = 1'b0;
 	always @(posedge i_clk)
-	if (i_reset)
+	if (!S_AXI_ARESETN)
 		read_busy <= 0;
 	else if (!read_busy)
 		read_busy <= axil_read_ready
@@ -1119,28 +1115,9 @@ module	memscope #(
 	//
 	localparam	F_AXI_LGDEPTH = 11; // LGLENW-LGMAXBURST+2 ??
 
-	wire	[F_AXI_LGDEPTH-1:0]	faxi_awr_nbursts, faxi_rd_outstanding,
-					faxi_wrid_nbursts, faxi_rd_nbursts,
-					faxi_rdid_nbursts,faxi_rdid_outstanding,
-					faxi_rdid_ckign_nbursts,
-					faxi_rdid_ckign_outstanding;
-	wire	[C_AXI_ID_WIDTH-1:0]	faxi_wr_checkid, faxi_rd_checkid;
-	wire				faxi_wr_ckvalid, faxi_rd_ckvalid;
-	wire	[C_AXI_ADDR_WIDTH-1:0]	faxi_wr_addr;
-	wire	[8:0]			faxi_wr_pending;
-	wire	[7:0]			faxi_wr_incr;
-	wire	[1:0]			faxi_wr_burst;
-	wire	[2:0]			faxi_wr_size;
-	wire	[7:0]			faxi_wr_len;
-	wire				faxi_wr_lockd;
 	//
-	wire	[9-1:0]			faxi_rd_cklen;
-	wire	[C_AXI_ADDR_WIDTH-1:0]	faxi_rd_ckaddr;
-	wire	[7:0]			faxi_rd_ckincr;
-	wire	[1:0]			faxi_rd_ckburst;
-	wire	[2:0]			faxi_rd_cksize;
-	wire	[7:0]			faxi_rd_ckarlen;
-	wire				faxi_rd_cklockd;
+	// ...
+	//
 
 	faxi_master #(
 		// {{{
@@ -1149,11 +1126,10 @@ module	memscope #(
 		.C_AXI_DATA_WIDTH(C_AXI_DATA_WIDTH),
 		//
 		.OPT_EXCLUSIVE(1'b0),
-		.OPT_NARROW_BURST(1'b0),
-		.F_LGDEPTH(F_AXI_LGDEPTH),
-		.F_AXI_MAXSTALL(F_MEMDLY),
-		.F_AXI_MAXRSTALL(2),
-		.F_AXI_MAXDELAY(F_MEMDLY)
+		.OPT_NARROW_BURST(1'b0)
+		//
+		// ...
+		//
 		// }}}
 	) faxi(
 		// {{{
@@ -1198,64 +1174,22 @@ module	memscope #(
 		.i_axi_rready(M_AXI_RREADY),
 		.i_axi_rdata( M_AXI_RDATA),
 		.i_axi_rlast( M_AXI_RLAST),
-		.i_axi_rresp( M_AXI_RRESP),
+		.i_axi_rresp( M_AXI_RRESP)
 		//
 		//
-		.f_axi_awr_nbursts(faxi_awr_nbursts),
-		.f_axi_wr_pending(faxi_wr_pending),
-		.f_axi_rd_nbursts(faxi_rd_nbursts),
-		.f_axi_rd_nbursts(faxi_rd_nbursts),
-		.f_axi_rd_outstanding(faxi_rd_outstanding),
-		//
-		.f_axi_wr_checkid(faxi_wr_checkid),
-		.f_axi_wr_ckvalid(faxi_wr_ckvalid),
-		.f_axi_wrid_nbursts(faxi_wrid_nbursts),
-		.f_axi_wr_addr( faxi_wr_addr),
-		.f_axi_wr_incr( faxi_wr_incr),
-		.f_axi_wr_burst(faxi_wr_burst),
-		.f_axi_wr_size( faxi_wr_size),
-		.f_axi_wr_len(  faxi_wr_len),
-		.f_axi_wr_lockd(faxi_wr_lockd),
-		//
-		.f_axi_rd_checkid(faxi_rd_checkid),
-		.f_axi_rd_ckvalid(faxi_rd_ckvalid),
-		.f_axi_rd_cklen(faxi_rd_cklen),
-		.f_axi_rd_ckaddr(faxi_rd_ckaddr),
-		.f_axi_rd_ckincr(faxi_rd_ckincr),
-		.f_axi_rd_ckburst(faxi_rd_ckburst),
-		.f_axi_rd_cksize(faxi_rd_cksize),
-		.f_axi_rd_ckarlen(faxi_rd_ckarlen),
-		.f_axi_rd_cklockd(faxi_rd_cklockd),
-		.f_axi_rdid_nbursts(faxi_rdid_nbursts),
-		.f_axi_rdid_outstanding(faxi_rdid_outstanding),
-		.f_axi_rdid_ckign_nbursts(faxi_rdid_ckign_nbursts),
-		.f_axi_rdid_ckign_outstanding(faxi_rdid_ckign_outstanding)
+		// ...
 		//
 		// }}}
 	);
 
-	always @(*)
-		assume(faxi_wr_checkid == AXI_ID);
-
-	always @(*)
-	if (faxi_wr_ckvalid)
-	begin
-		assert(faxi_wr_burst == 2'b01);
-		assert(faxi_wr_size == M_AXI_AWSIZE);
-		assert(!faxi_wr_lockd);
-	end
-
-	always @(*)
-		assert(aw_bursts_outstanding == faxi_awr_nbursts
-				+ ((M_AXI_AWVALID&&!phantom_start) ? 1:0));
-
-	always @(*)
-		assert(faxi_wrid_nbursts == faxi_awr_nbursts);
+	//
+	// ...
+	//
 
 	always @(posedge i_clk)
 	if (M_AXI_AWVALID)
 	begin
-		assert(faxi_wr_pending == 0);
+		// ...
 		if (phantom_start)
 		begin
 			assert(wr_writes_pending == 0);
@@ -1263,38 +1197,14 @@ module	memscope #(
 		end else if ($past(phantom_start))
 			assert(wr_writes_pending <= M_AXI_AWLEN+1);
 	end else begin
-		assert(wr_writes_pending == faxi_wr_pending);
+		// ...
 		assert(wr_none_pending == (wr_writes_pending == 0));
 	end
 
-	always @(*)
-	if (faxi_wr_ckvalid)
-	begin
-		assert(faxi_wr_size == M_AXI_AWSIZE);
-		assert(faxi_wr_incr == (1<<M_AXI_AWSIZE));
-		assert(faxi_wr_lockd == 1'b0);
-		assert(faxi_wr_burst == 2'b01);
-	end
+	//
+	// ...
+	//
 
-	always @(*)
-	begin
-		assert(faxi_rd_nbursts == ((read_busy && !M_AXI_ARVALID)? 1:0));
-		assert(faxi_rd_outstanding==((read_busy&&!M_AXI_ARVALID)? 1:0));
-		assert(faxi_rdid_nbursts == faxi_rdid_outstanding);
-		assert(faxi_rdid_nbursts ==
-			((read_busy && faxi_rd_checkid == AXI_ID
-						&& !M_AXI_ARVALID) ? 1:0));
-		
-		if (faxi_rd_ckvalid)
-		begin
-			assert(faxi_rd_ckburst== 2'b00);
-			assert(faxi_rd_cksize == M_AXI_ARSIZE);
-			assert(faxi_rd_ckarlen == 8'h0);
-			assert(faxi_rd_cklockd == 1'b0);
-
-			assert(faxi_rdid_ckign_nbursts == 0);
-		end
-	end
 	// }}}
 	////////////////////////////////////////////////////////////////////////
 	//
@@ -1313,7 +1223,7 @@ module	memscope #(
 		assert(!M_AXI_AWVALID);
 		assert(!M_AXI_WVALID);
 		assert(!M_AXI_BVALID);
-		assert(faxi_awr_nbursts == 0);
+		// ...
 	end
 
 	always @(*)
@@ -1328,7 +1238,7 @@ module	memscope #(
 		assert(data_available == fifo_fill - wr_writes_pending);
 		assert(data_available <= fifo_fill);
 		assert(wr_writes_pending <= fifo_fill);
-	end else
+	end else if (S_AXI_ARESETN)
 		assert(wr_writes_pending == 0);
 
 	always @(*)
