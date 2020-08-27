@@ -1,0 +1,72 @@
+[*]
+[*] GTKWave Analyzer v3.3.66 (w)1999-2015 BSI
+[*] Wed Aug 26 21:03:27 2020
+[*]
+[dumpfile_mtime] "Wed Aug 26 20:57:31 2020"
+[dumpfile_size] 29471
+[timestart] 348
+[size] 1747 600
+[pos] -1 -1
+*-4.696020 64 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 196
+[signals_width] 198
+[sst_expanded] 1
+[sst_vpaned_height] 155
+@28
+axisrle.S_AXI_ACLK
+axisrle.S_AXI_ARESETN
+@200
+-
+@28
+axisrle.i_encode
+axisrle.i_trigger
+@800200
+-Incoming
+@28
+axisrle.S_AXIS_TVALID
+axisrle.S_AXIS_TREADY
+@22
+axisrle.S_AXIS_TDATA[30:0]
+@1000200
+-Incoming
+@c00200
+-Mid-check
+@28
+axisrle.mid_valid
+axisrle.mid_same
+@22
+axisrle.mid_data[30:0]
+@1401200
+-Mid-check
+@c00200
+-Run counting
+@28
+axisrle.run_valid
+axisrle.run_ready
+axisrle.run_active
+axisrle.run_overflow
+@22
+axisrle.run_data[30:0]
+axisrle.run_length[30:0]
+@1401200
+-Run counting
+@800200
+-Outgoing
+@28
+axisrle.M_AXIS_TVALID
+axisrle.M_AXIS_TREADY
+@22
+axisrle.M_AXIS_TDATA[31:0]
+@1000200
+-Outgoing
+@22
+axisrle.f_outstanding[32:0]
+@28
+axisrle.f_special_tdata
+@22
+axisrle.f_recount[32:0]
+axisrle.f_special_count[32:0]
+@23
+axisrle.f_special_data[30:0]
+[pattern_trace] 1
+[pattern_trace] 0

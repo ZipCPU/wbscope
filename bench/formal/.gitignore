@@ -3,3 +3,4 @@ axilscope_sync
 faxil_slave.v
 faxi_*.v
 memscope_*/
+axisrle_*/

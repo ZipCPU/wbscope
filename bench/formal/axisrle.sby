@@ -1,0 +1,31 @@
+[tasks]
+prf
+prf8  prf bus8
+prf16 prf bus16
+cvr
+
+[options]
+prf: mode prove
+prf: depth 3
+cvr: mode cover
+cvr: depth 30
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal axisrle.v
+--pycode-begin--
+cmd = "hierarchy -top axisrle"
+if ("bus8" in tags):
+	cmd += " -chparam C_AXIS_DATA_WIDTH 8"
+elif ("bus16" in tags):
+	cmd += " -chparam C_AXIS_DATA_WIDTH 16"
+else:
+	cmd += " -chparam C_AXIS_DATA_WIDTH 32"
+output(cmd)
+--pycode-end--
+prep -top axisrle
+
+[files]
+../../rtl/axisrle.v

@@ -46,6 +46,14 @@ with the short discussion of how to set it up for that task
 1. [Wishbone B4/pipelined](rtl/wbscope.v)
 2. [AXI lite](rtl/axilscope.v)
 3. [Avalon](rtl/avscope.v)
+4. [Memory backed scope, using AXI](rtl/memscope.v).  This is great for when
+   your data capture can't git in the on-chip RAM of a device.  Using this
+   core, you can store your capture in an off-chip SDRAM.  Beware, an
+   SDRAM can hold a _LOT_ of data.
+5. [_Compressed_ Memory backed scope, using AXI](rtl/memscopc.v).  This uses the
+   same basic run-length compression scheme as the [original compressed
+   Wishbone scope](rtl/wbscopc.v), only this time with the AXI memory
+   back end.
 
 # Commercial Applications
 
