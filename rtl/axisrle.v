@@ -362,11 +362,11 @@ module	axisrle #(
 	// {{{
 	always @(posedge S_AXI_ACLK)
 	if (!f_past_valid || $past(!S_AXI_ARESETN))
-		assume(!M_AXIS_TVALID);
+		assert(!M_AXIS_TVALID);
 	else if ($past(M_AXIS_TVALID && !M_AXIS_TREADY))
 	begin
-		assume(M_AXIS_TVALID);
-		assume($stable(M_AXIS_TDATA));
+		assert(M_AXIS_TVALID);
+		assert($stable(M_AXIS_TDATA));
 	end
 	// }}}
 
@@ -423,7 +423,7 @@ module	axisrle #(
 			assert(f_recount == f_outstanding);
 
 		if (M_AXIS_TVALID && M_AXIS_TDATA[MSB] && !(&M_AXIS_TDATA))
-			assert(!run_valid || !run_active);
+			assert(!run_active);
 	end
 	// }}}
 
@@ -434,8 +434,8 @@ module	axisrle #(
 		f_special_tdata <= (run_data == f_special_data);
 
 	always @(*)
-	if (M_AXIS_TVALID && !M_AXIS_TDATA[MSB] && f_special_tdata)
-		assert(M_AXIS_TDATA[W-2:0] == f_special_data);
+	if (M_AXIS_TVALID && !M_AXIS_TDATA[MSB])
+		assert(f_special_tdata == (M_AXIS_TDATA[W-2:0] == f_special_data));
 
 	initial	f_special_count = 0;
 	always @(posedge S_AXI_ACLK)
@@ -536,24 +536,20 @@ module	axisrle #(
 	// r_overflow
 	// {{{
 	always @(*)
-		assert(run_overflow == (run_active && (&run_length)));
+		assert(run_overflow == (&run_length));
 	// }}}
 
 	// mid_trigger
 	// {{{
 	always @(*)
-	if (!mid_valid)
-		assert(!mid_trigger);
-	else if (mid_same)
+	if (!mid_valid || mid_same || !r_triggered)
 		assert(!mid_trigger);
 	// }}}
 
 	// run_trigger
 	// {{{
 	always @(*)
-	if (!run_valid)
-		assert(!run_trigger);
-	else if (run_active)
+	if (!run_valid || run_active || !r_triggered)
 		assert(!run_trigger);
 	// }}}
 
@@ -604,18 +600,14 @@ module	axisrle #(
 	//
 	//
 
-	reg	[W-1:0]	cvr_index, cvr_sum;
-	reg	[3:0]	cvr_set;
-
-	always @(*)
-		cvr_sum = cvr_index;
+	reg	[W-1:0]	cvr_index;
 
 	initial	cvr_index = 0;
 	always @(posedge S_AXI_ACLK)
 	if (!S_AXI_ARESETN)
 		cvr_index <= 0;
 	else if (M_AXIS_TVALID && M_AXIS_TREADY
-			&& M_AXIS_TDATA == { cvr_sum[0], cvr_sum[W-2:0] })
+			&& M_AXIS_TDATA == { cvr_index[0], cvr_index[W-2:0] })
 		cvr_index <= cvr_index + 1;
 
 	always @(*)
