@@ -9,6 +9,24 @@
 //	compresses the capture data coming in before writing it to memory.
 //	As such, it can capture *exceptionally* long recordings.
 //
+// Known Issues:
+//	The run-length compressor isn't well integrated into the memscope
+//	logic analyzer (yet):
+//
+//	1. The run-length compressor won't see any manual triggers, so
+//		manual triggers might end up getting compressed.
+//
+//	2. The run-length compressor isn't paying attention to overflow.
+//		Overflow will happen there, rather than within the internal
+//		memscope.
+//
+//	3. The run-length compressor doesn't truly know if the internal scope
+//		is primed or not.  As a result, it won't start compressing until
+//		some time *after* the scope has been primed and is ready to go.
+//
+//	4. The run-length compressor should only ever trigger once, and ever
+//		after run-length encode samples where the trigger is active.
+//
 // Creator:	Dan Gisselquist, Ph.D.
 //		Gisselquist Technology, LLC
 //

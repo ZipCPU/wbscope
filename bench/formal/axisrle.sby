@@ -15,6 +15,7 @@ smtbmc boolector
 
 [script]
 read -formal axisrle.v
+read -formal skidbuffer.v
 --pycode-begin--
 cmd = "hierarchy -top axisrle"
 if ("bus8" in tags):
@@ -29,3 +30,4 @@ prep -top axisrle
 
 [files]
 ../../rtl/axisrle.v
+../../rtl/skidbuffer.v

@@ -42,11 +42,11 @@
 //
 // License:	GPL, v3, as defined and found on www.gnu.org,
 //		http://www.gnu.org/licenses/gpl.html
-// }}}
+//
 ////////////////////////////////////////////////////////////////////////////////
 //
 `default_nettype	none
-//
+// }}}
 module	axisrle #(
 		parameter	C_AXIS_DATA_WIDTH = 32-1,
 		localparam	W = C_AXIS_DATA_WIDTH
@@ -56,7 +56,7 @@ module	axisrle #(
 		// Incoming AXI data stream
 		// {{{
 		input	wire		S_AXIS_TVALID,
-		output	reg		S_AXIS_TREADY,
+		output	wire		S_AXIS_TREADY,
 		input	wire [W-2:0]	S_AXIS_TDATA,
 		// }}}
 		// Outgoing AXI data stream
@@ -75,8 +75,12 @@ module	axisrle #(
 	// Register/net declarations
 	// {{{
 	localparam	MSB = W-1;
-	reg		r_enable;
 	//
+	reg		sticky_trigger, sticky_encode, r_trigger, r_encode;
+	wire		skd_valid;
+	reg		skd_encode, skd_trigger, skd_ready, r_triggered;
+	wire	[W-2:0]	skd_data;
+
 	reg		mid_valid, mid_same, mid_trigger;
 	reg	[W-2:0]	mid_data;
 	//
@@ -85,37 +89,96 @@ module	axisrle #(
 	reg	[W-2:0]	run_length, run_data;
 	// }}}
 
-	// S_AXIS_TREADY
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Skid buffer stage
 	// {{{
-	always @(*)
-		S_AXIS_TREADY = !mid_valid || run_ready;
-	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 
-	// r_enable
+	// sticky_encode, sticky_trigger
 	// {{{
-	initial	r_enable = 1'b0;
+	// Make !sticky_encode and sticky_trigger sticky
+	initial	sticky_encode  = 1;
+	initial	sticky_trigger = 0;
 	always @(posedge S_AXI_ACLK)
 	if (!S_AXI_ARESETN)
-		r_enable <= 1'b0;
-	else if (S_AXIS_TVALID && S_AXIS_TREADY)
-		r_enable <= i_encode;
-	else if (r_enable)
-		r_enable <= i_encode && !i_trigger;
+	begin
+		sticky_encode <= 1;
+		sticky_trigger <= 0;
+	end else if (S_AXIS_TVALID && S_AXIS_TREADY)
+	begin
+		sticky_encode  <= 1;
+		sticky_trigger <= 0;
+	end else begin
+		sticky_encode <= sticky_encode && i_encode;
+		sticky_trigger <= sticky_trigger || i_trigger;
+	end
 	// }}}
 
+	// Incoming skid buffer
+	// {{{
+	skidbuffer #(
+		.DW(W-1), .OPT_OUTREG(1'b0)
+	) skid(
+		// {{{
+		.i_clk(S_AXI_ACLK), .i_reset(!S_AXI_ARESETN),
+		.i_valid(S_AXIS_TVALID), .o_ready(S_AXIS_TREADY),
+			.i_data(S_AXIS_TDATA),
+		.o_valid(skd_valid), .i_ready(skd_ready),
+			.o_data(skd_data)
+		// }}}
+	);
+	// }}}
+
+	// skd_ready
+	// {{{
+	always @(*)
+		skd_ready = !mid_valid || run_ready;
+	// }}}
+
+	// r_trigger, r_encode
+	// {{{
+	always @(posedge S_AXI_ACLK)
+	if (S_AXIS_TVALID && S_AXIS_TREADY)
+	begin
+		r_trigger <= (i_trigger || sticky_trigger);
+		r_encode  <= i_encode && sticky_encode;
+	end
+	// }}}
+
+	// skd_trigger, skd_encode
+	// {{{
+	always @(*)
+	if (S_AXIS_TREADY)
+		{ skd_trigger, skd_encode } <= { (i_trigger || sticky_trigger),
+					(i_encode && sticky_encode) };
+	else
+		{ skd_trigger, skd_encode } <= { r_trigger, r_encode };
+	// }}}
+
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
 	// mid-stage: determine if we'll run-length compress or not
 	// {{{
-	initial	mid_valid = 0;
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
+	initial	mid_valid   = 0;
 	initial	mid_trigger = 0;
+	initial	r_triggered = 0;
 	always @(posedge S_AXI_ACLK)
 	begin
-		if (S_AXIS_TVALID && S_AXIS_TREADY)
+		if (skd_valid && skd_ready)
 		begin
 			mid_valid <= 1'b1;
-			mid_data <= S_AXIS_TDATA;
-			mid_same <= run_valid && (S_AXIS_TDATA == mid_data);
-			mid_trigger<= i_trigger;
-			if (!i_encode || i_trigger || !r_enable)
+			mid_data <= skd_data;
+			mid_same <= (mid_valid || run_valid) && (skd_data == mid_data);
+			mid_trigger <= skd_trigger && !r_triggered;
+			r_triggered <= r_triggered || skd_trigger;
+			if (!skd_encode || (skd_trigger && !r_triggered))
 				mid_same <= 1'b0;
 		end else if (run_ready)
 		begin
@@ -125,13 +188,20 @@ module	axisrle #(
 
 		if (!S_AXI_ARESETN)
 		begin
-			mid_valid <= 1'b0;
+			mid_valid   <= 1'b0;
 			mid_trigger <= 1'b0;
+			r_triggered <= 1'b0;
 		end
 	end
 	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Run-length accumulation and compression stage
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 
-	// run-capture:
 	// {{{
 	initial	run_valid    = 1'b0;
 	initial	run_active   = 1'b0;
@@ -140,33 +210,22 @@ module	axisrle #(
 	initial	run_trigger  = 0;
 	always @(posedge S_AXI_ACLK)
 	begin
-		if (!run_valid || run_ready)
+		if (run_ready)
 		begin
-			run_overflow <= 1'b0;
-			run_valid <= mid_valid;
+			run_valid  <= mid_valid;
 			run_trigger<= mid_trigger;
+			run_data   <= mid_data;
 
-			if (mid_valid)
-			begin
-				run_active <= mid_same;
-
-				if (run_active && mid_same)
-					run_length <= run_length + 1;
-				else
-					run_length <= 0;
-
-				run_overflow <= (mid_same) && (run_length >= {
-					{(W-2){1'b1}}, 1'b0 });
-				if (!mid_same || run_overflow)
-					run_overflow <= 1'b0;
-
-				if (!mid_same)
-					run_data <= mid_data;
-			end else begin
-				run_active <= 1'b0;
+			run_active <= mid_valid && mid_same;
+			if (run_active && mid_same)
+				run_length <= run_length + 1;
+			else
 				run_length <= 0;
-				run_overflow <= 0;
-			end
+
+			run_overflow <= (run_length >= {
+				{(W-2){1'b1}}, 1'b0 });
+			if (!mid_same || run_overflow)
+				run_overflow <= 1'b0;
 		end
 
 		if (!S_AXI_ARESETN)
@@ -185,20 +244,25 @@ module	axisrle #(
 	always @(*)
 	begin
 		run_ready = (!M_AXIS_TVALID || M_AXIS_TREADY);
-		if (!run_active || !run_overflow)
-		begin
-			if (run_active && mid_valid && mid_same)
-				run_ready = 1'b1;
 
-			// Wait to know if we can combine this with something
-			if (!mid_valid)
-				run_ready = 1'b0;
-		end
+		// Can always accumulate into the current run--as long
+		// as we aren't going to overflow our counter
+		if (run_active && !run_overflow && mid_same)
+			run_ready = 1;
 
-		if (!run_valid)
-			run_ready = 1'b1;
+		if (!mid_valid)
+			run_ready = 0;
 	end
 	// }}}
+
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Final AXI stream output stage
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 
 	// M_AXIS_TVALID
 	// {{{
@@ -210,14 +274,18 @@ module	axisrle #(
 	begin
 		M_AXIS_TVALID <= 0;
 
-		// Always valid if our counter is overflowing
-		if (run_valid && run_active && run_overflow)
-			M_AXIS_TVALID <= 1'b1;
+		if (run_valid && run_ready)
+		begin
+			// Always valid if our counter is overflowing
+			if (run_active && run_overflow)
+				M_AXIS_TVALID <= 1'b1;
 
-		// Always valid if a new item comes in on mid that *isn't*
-		// the same, or if we aren't in an active run yet
-		if (run_valid && mid_valid && (!mid_same || !run_active))
-			M_AXIS_TVALID <= 1'b1;
+			// Always valid if a new item comes in on mid that
+			// *isn't* the same, or if we aren't in an active run
+			// yet
+			if (!mid_same || !run_active)
+				M_AXIS_TVALID <= 1'b1;
+		end
 	end
 	// }}}
 
@@ -242,7 +310,7 @@ module	axisrle #(
 	else if (!M_AXIS_TVALID || M_AXIS_TREADY)
 		o_trigger <= run_trigger && run_ready;
 	// }}}
-
+	// }}}
 	// Make Verilator happy
 	// {{{
 	// Verilator lint_off UNUSED
@@ -278,7 +346,7 @@ module	axisrle #(
 		assume(!S_AXI_ARESETN);
 	// }}}
 
-	// Incoming AXI stream properties
+	// Incoming AXI stream properties 
 	// {{{
 	always @(posedge S_AXI_ACLK)
 	if (!f_past_valid || $past(!S_AXI_ARESETN))
@@ -338,6 +406,8 @@ module	axisrle #(
 	always @(*)
 	begin
 		f_recount = 0;
+		if (!S_AXIS_TREADY && skd_valid)
+			f_recount = f_recount + 1;
 		if (mid_valid)
 			f_recount = f_recount + 1;
 		if (run_valid && run_active)
@@ -349,7 +419,11 @@ module	axisrle #(
 		else if (M_AXIS_TVALID)
 			f_recount = f_recount + 1;
 
-		assert(f_recount == f_outstanding);
+		if (S_AXI_ARESETN)
+			assert(f_recount == f_outstanding);
+
+		if (M_AXIS_TVALID && M_AXIS_TDATA[MSB] && !(&M_AXIS_TDATA))
+			assert(!run_valid || !run_active);
 	end
 	// }}}
 
@@ -403,6 +477,8 @@ module	axisrle #(
 	begin
 		f_special_recount = 0;
 
+		if (!S_AXIS_TREADY && skd_valid && skd_data == f_special_data)
+			f_special_recount = f_special_recount + 1;
 		if (mid_valid && mid_data == f_special_data)
 			f_special_recount = f_special_recount + 1;
 		if (run_valid && run_data == f_special_data)
@@ -418,8 +494,23 @@ module	axisrle #(
 				f_special_recount = f_special_recount + M_AXIS_TDATA[W-2:0];
 		end
 
-		assert(f_special_recount == f_special_count);
+		assert(!S_AXI_ARESETN || f_special_recount == f_special_count);
 	end
+	// }}}
+
+	// run_valid
+	// {{{
+	always @(posedge S_AXI_ACLK)
+	if (!f_past_valid || !$past(S_AXI_ARESETN))
+		assert(!run_valid);
+	else if ($past(run_valid))
+		assert(run_valid);
+	else if ($past(mid_valid))
+		assert(run_valid);
+
+	always @(*)
+	if (M_AXIS_TVALID)
+		assert(run_valid);
 	// }}}
 
 	// mid_same
@@ -445,8 +536,7 @@ module	axisrle #(
 	// r_overflow
 	// {{{
 	always @(*)
-		assert(run_overflow
-			== (run_valid && run_active && (&run_length)));
+		assert(run_overflow == (run_active && (&run_length)));
 	// }}}
 
 	// mid_trigger
@@ -486,6 +576,9 @@ module	axisrle #(
 		if (M_AXIS_TVALID)
 			assert(M_AXIS_TDATA != { 1'b0, f_never_data });
 
+		if (skd_valid)
+			assert(skd_data != f_never_data);
+
 		if (mid_valid)
 			assert(mid_data != f_never_data);
 
@@ -511,19 +604,18 @@ module	axisrle #(
 	//
 	//
 
-	(* anyconst *)	reg	[W-1:0]	cvr_pattern;
 	reg	[W-1:0]	cvr_index, cvr_sum;
 	reg	[3:0]	cvr_set;
 
 	always @(*)
-		cvr_sum = cvr_index + cvr_pattern;
+		cvr_sum = cvr_index;
 
 	initial	cvr_index = 0;
 	always @(posedge S_AXI_ACLK)
 	if (!S_AXI_ARESETN)
 		cvr_index <= 0;
 	else if (M_AXIS_TVALID && M_AXIS_TREADY
-			&& M_AXIS_TDATA == { cvr_sum[0], cvr_sum[W-1:0] })
+			&& M_AXIS_TDATA == { cvr_sum[0], cvr_sum[W-2:0] })
 		cvr_index <= cvr_index + 1;
 
 	always @(*)
@@ -534,7 +626,7 @@ module	axisrle #(
 		cover(cvr_index == 4);
 		cover(cvr_index == 5);
 		cover(cvr_index == 6);
-		cover(cvr_index == 7);
+		cover(cvr_index == 7 && o_trigger);
 	end
 	// }}}
 	////////////////////////////////////////////////////////////////////////
