@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename:	wbscope_tb.cpp
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	A quick test bench to determine if the wbscope module works.
@@ -10,9 +10,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -27,14 +27,14 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
 #include <stdio.h>
 
 #include <verilated.h>
@@ -49,36 +49,43 @@ const int	LGMEMSIZE = 15;
 class	WBSCOPE_TB : public WB_TB<Vwbscope_tb> {
 	bool		m_bomb, m_debug;
 public:
-
+	// {{{
 	WBSCOPE_TB(void) {
 		m_debug = true;
 	}
 
 	void	tick(void) {
+		// {{{
 
 		WB_TB<Vwbscope_tb>::tick();
 
 		bool	writeout = true;
 		if ((m_debug)&&(writeout)) {}
+		// }}}
 	}
 
 	void reset(void) {
+		// {{{
 		m_core->i_reset    = 1;
 		m_core->i_wb_cyc = 0;
 		m_core->i_wb_stb = 0;
 		tick();
 		m_core->i_reset  = 0;
+		// }}}
 	}
 
 	unsigned	trigger(void) {
+		// {{{
 		m_core->i_trigger = 1;
 		idle();
 		m_core->i_trigger = 0;
 		return m_core->o_data;
+		// }}}
 	}
 
 	bool	debug(void) const { return m_debug; }
 	bool	debug(bool nxtv) { return m_debug = nxtv; }
+	// }}}
 };
 
 int main(int  argc, char **argv) {

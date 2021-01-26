@@ -22,7 +22,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2020, Gisselquist Technology, LLC
+// Copyright (C) 2020-2021, Gisselquist Technology, LLC
 // {{{
 //
 // This program is free software (firmware): you can redistribute it and/or
@@ -48,8 +48,10 @@
 `default_nettype	none
 // }}}
 module	axisrle #(
+		// {{{
 		parameter	C_AXIS_DATA_WIDTH = 32-1,
 		localparam	W = C_AXIS_DATA_WIDTH
+		// }}}
 	) (
 		// {{{
 		input	wire		S_AXI_ACLK, S_AXI_ARESETN,
@@ -74,7 +76,6 @@ module	axisrle #(
 
 	// Register/net declarations
 	// {{{
-	localparam	MSB = W-1;
 	//
 	reg		sticky_trigger, sticky_encode, r_trigger, r_encode;
 	wire		skd_valid;
@@ -152,10 +153,10 @@ module	axisrle #(
 	// {{{
 	always @(*)
 	if (S_AXIS_TREADY)
-		{ skd_trigger, skd_encode } <= { (i_trigger || sticky_trigger),
+		{ skd_trigger, skd_encode } = { (i_trigger || sticky_trigger),
 					(i_encode && sticky_encode) };
 	else
-		{ skd_trigger, skd_encode } <= { r_trigger, r_encode };
+		{ skd_trigger, skd_encode } = { r_trigger, r_encode };
 	// }}}
 
 	// }}}
@@ -329,6 +330,7 @@ module	axisrle #(
 ////////////////////////////////////////////////////////////////////////////////
 `ifdef	FORMAL
 	// {{{
+	localparam	MSB = W-1;
 	reg		f_past_valid;
 	reg	[W:0]	f_outstanding, f_special_count,
 			f_recount, f_special_recount, f_non_specials;
@@ -517,7 +519,7 @@ module	axisrle #(
 	// {{{
 	always @(*)
 	if (mid_valid && mid_same)
-		assert(mid_data == run_data);
+		assert(run_valid && mid_data == run_data);
 	else if (!mid_valid && run_valid)
 		assert(mid_data == run_data);
 	// }}}

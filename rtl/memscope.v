@@ -12,7 +12,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2020, Gisselquist Technology, LLC
+// Copyright (C) 2020-2021, Gisselquist Technology, LLC
 // {{{
 //
 // This program is free software (firmware): you can redistribute it and/or
@@ -175,6 +175,9 @@ module	memscope #(
 		output	reg				o_int
 		// }}}
 	);
+
+	// Local parameters
+	// {{{
 	localparam [1:0]	CMD_CONTROL   = 2'b00,
 				CMD_DATA      = 2'b01,
 				CMD_ADDRLO    = 2'b10,
@@ -182,14 +185,17 @@ module	memscope #(
 				// CMD_RESERVED = 2'b11;
 	localparam	LGMAXBURST=(LGFIFO > 8) ? 8 : LGFIFO-1;
 	localparam	LGLENW  = LGLEN  - ($clog2(C_AXI_DATA_WIDTH)-3);
-	localparam	LGFIFOB = LGFIFO + ($clog2(C_AXI_DATA_WIDTH)-3);
-	localparam [ADDRLSB-1:0] LSBZEROS = 0;
+	//
+	// Useful, but unused localparam's:
+	// localparam	LGFIFOB = LGFIFO + ($clog2(C_AXI_DATA_WIDTH)-3);
+	// localparam [ADDRLSB-1:0] LSBZEROS = 0;
+	// }}}
 
-
-	wire	i_clk   =  S_AXI_ACLK;
 
 	// Signal declarations
 	// {{{
+	wire	i_clk   =  S_AXI_ACLK;
+
 	reg			r_busy, r_err, w_complete, scope_reset,
 				read_reset, read_busy, s_stopped, primed,
 				disable_trigger, manual_trigger, triggered,

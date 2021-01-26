@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename:	wb_tb.cpp
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	To provide a fairly generic interface wrapper to a wishbone bus,
@@ -11,9 +11,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -28,14 +28,14 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -47,18 +47,21 @@
 const int	BOMBCOUNT = 32;
 
 template <class VA>	class	WB_TB : public TESTB<VA>, public DEVBUS {
+	// {{{
 #ifdef	WBERR
 	bool	m_buserr;
 #endif
 #ifdef	INTERRUPTWIRE
 	bool	m_interrupt;
 #endif
+	// }}}
 public:
 	typedef	uint32_t	BUSW;
 	
 	bool	m_bomb;
 
 	WB_TB(void) {
+		// {{{
 		m_bomb = false;
 		TESTB<VA>::m_core->i_wb_cyc = 0;
 		TESTB<VA>::m_core->i_wb_stb = 0;
@@ -70,14 +73,22 @@ public:
 #endif
 	}
 
+	// close()
+	// {{{
 	virtual	void	close(void) {
 		TESTB<VA>::closetrace();
 	}
+	// }}}
 
+	// kill()
+	// {{{
 	virtual	void	kill(void) {
 		close();
 	}
+	// }}}
 
+	// tick()
+	// {{{
 #ifdef	INTERRUPTWIRE
 	virtual	void	tick(void) {
 		TESTB<VA>::tick();
@@ -86,7 +97,10 @@ public:
 	}
 #endif
 #define	TICK	this->tick
+	// }}}
 
+	// idle
+	// {{{
 	void	idle(const unsigned counts = 1) {
 		TESTB<VA>::m_core->i_wb_cyc = 0;
 		TESTB<VA>::m_core->i_wb_stb = 0;
@@ -95,7 +109,10 @@ public:
 			assert(!TESTB<VA>::m_core->o_wb_ack);
 		}
 	}
+	// }}}
 
+	// readio()
+	// {{{
 	BUSW readio(BUSW a) {
 		int		errcount = 0;
 		BUSW		result;
@@ -156,7 +173,10 @@ public:
 
 		return result;
 	}
+	// }}}
 
+	// readv()
+	// {{{
 	void	readv(const BUSW a, int len, BUSW *buf, const int inc=1) {
 		int		errcount = 0;
 		int		THISBOMBCOUNT = BOMBCOUNT * len;
@@ -233,15 +253,24 @@ public:
 		TICK();
 		assert(!TESTB<VA>::m_core->o_wb_ack);
 	}
+	// }}}
 
+	// readi()
+	// {{{
 	void	readi(const BUSW a, const int len, BUSW *buf) {
 		return readv(a, len, buf, 1);
 	}
+	// }}}
 
+	// readz()
+	// {{{
 	void	readz(const BUSW a, const int len, BUSW *buf) {
 		return readv(a, len, buf, 0);
 	}
+	// }}}
 
+	// writeio()
+	// {{{
 	void	writeio(const BUSW a, const BUSW v) {
 		int errcount = 0;
 
@@ -311,6 +340,10 @@ public:
 		assert(!TESTB<VA>::m_core->o_wb_stall);
 	}
 
+	// }}}
+
+	// writev()
+	// {{{
 	void	writev(const BUSW a, const int ln, const BUSW *buf, const int inc=1) {
 		unsigned errcount = 0, nacks = 0;
 
@@ -386,21 +419,29 @@ public:
 		assert(!TESTB<VA>::m_core->o_wb_ack);
 		assert(!TESTB<VA>::m_core->o_wb_stall);
 	}
+	// }}}
 
+	// writei()
+	// {{{
 	void	writei(const BUSW a, const int ln, const BUSW *buf) {
 		writev(a, ln, buf, 1);
 	}
+	// }}}
 
+	// writez()
+	// {{{
 	void	writez(const BUSW a, const int ln, const BUSW *buf) {
 		writev(a, ln, buf, 0);
 	}
-
+	// }}}
 
 	bool	bombed(void) const { return m_bomb; }
 
 	// bool	debug(void) const	{ return m_debug; }
 	// bool	debug(bool nxtv)	{ return m_debug = nxtv; }
 
+	// poll()
+	// {{{
 	bool	poll(void) {
 #ifdef	INTERRUPTWIRE
 		return (m_interrupt)||(TESTB<VA>::m_core->INTERRUPTWIRE != 0);
@@ -409,6 +450,10 @@ public:
 #endif
 	}
 
+	// }}}
+
+	// bus_err()
+	// {{{
 	bool	bus_err(void) const {
 #ifdef	WBERR
 		return m_buserr;
@@ -416,13 +461,19 @@ public:
 		return false;
 #endif
 	}
+	// }}}
 
+	// reset_err()
+	// {{{
 	void	reset_err(void) {
 #ifdef	WBERR
 		m_buserr = false;;
 #endif
 	}
+	// }}}
 
+	// usleep()
+	// {{{
 	void	usleep(unsigned msec) {
 #ifdef	CLKRATEHZ
 		unsigned count = CLKRATEHZ / 1000 * msec;
@@ -436,13 +487,19 @@ public:
 #endif
 			TICK();
 	}
+	// }}}
 
+	// clear()
+	// {{{
 	void	clear(void) {
 #ifdef	INTERRUPTWIRE
 		m_interrupt = false;
 #endif
 	}
+	// }}}
 
+	// wait()
+	// {{{
 	void	wait(void) {
 #ifdef	INTERRUPTWIRE
 		while(!poll())
@@ -451,5 +508,7 @@ public:
 		assert(("No interrupt defined",0));
 #endif
 	}
+	// }}}
+	// }}}
 };
 

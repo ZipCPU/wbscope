@@ -1,7 +1,7 @@
 ################################################################################
 ##
 ## Filename:	Makefile
-##
+## {{{
 ## Project:	WBScope, a wishbone hosted scope
 ##
 ## Purpose:	This makefile builds a verilator simulation of the rtl
@@ -13,9 +13,9 @@
 ##		Gisselquist Technology, LLC
 ##
 ################################################################################
-##
-## Copyright (C) 2015-2020, Gisselquist Technology, LLC
-##
+## }}}
+## Copyright (C) 2015-2021, Gisselquist Technology, LLC
+## {{{
 ## This program is free software (firmware): you can redistribute it and/or
 ## modify it under the terms of  the GNU General Public License as published
 ## by the Free Software Foundation, either version 3 of the License, or (at
@@ -30,23 +30,22 @@
 ## with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 ## target there if the PDF file isn't present.)  If not, see
 ## <http://www.gnu.org/licenses/> for a copy.
-##
+## }}}
 ## License:	GPL, v3, as defined and found on www.gnu.org,
+## {{{
 ##		http://www.gnu.org/licenses/gpl.html
-##
 ##
 ################################################################################
 ##
-##
+## }}}
 .PHONY: all
 all: wbscope_tb wbscopc_tb
 
 RTLD := ../../rtl
 VOBJ := obj_dir
 
-#
-#
 # Building the wbscope test bench
+## {{{
 #
 #
 $(VOBJ)/Vwbscope_tb.cpp: $(RTLD)/wbscope.v wbscope_tb.v
@@ -58,10 +57,10 @@ $(VOBJ)/Vwbscope_tb__ALL.a: $(VOBJ)/Vwbscope_tb.cpp $(VOBJ)/Vwbscope_tb.h
 
 .PHONY: wbscope_tb
 wbscope_tb: $(VOBJ)/Vwbscope_tb__ALL.a
+## }}}
 
-#
-#
 # Building the wbscopc test bench, for the compressed wbscope
+## {{{
 #
 #
 $(VOBJ)/Vwbscopc_tb.cpp: $(RTLD)/wbscopc.v wbscopc_tb.v
@@ -73,6 +72,7 @@ $(VOBJ)/Vwbscopc_tb__ALL.a: $(VOBJ)/Vwbscopc_tb.cpp $(VOBJ)/Vwbscopc_tb.h
 
 .PHONY: wbscopc_tb
 wbscopc_tb: $(VOBJ)/Vwbscopc_tb__ALL.a
+## }}}
 
 # $(VOBJ)/Vaxiscope_tb.cpp: $(RTLD)/axiscope.v axiscope.v
 #	verilator -trace -cc  -y $(RTLD) wbscope_tb.v

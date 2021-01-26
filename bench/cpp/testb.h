@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	testb.h
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	A wrapper for a common interface to a clocked FPGA core
@@ -11,9 +11,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -28,14 +28,14 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
 #ifndef	TESTB_H
 #define	TESTB_H
 
@@ -52,31 +52,39 @@ public:
 	unsigned long	m_tickcount;
 
 	TESTB(void) : m_trace(NULL), m_tickcount(0l) {
+		// {{{
 		m_core = new VA;
 		Verilated::traceEverOn(true);
 		m_core->i_clk = 0;
 		eval(); // Get our initial values set properly.
+		// }}}
 	}
 	virtual ~TESTB(void) {
+		// {{{
 		closetrace();
 		delete m_core;
 		m_core = NULL;
+		// }}}
 	}
 
 	virtual	void	opentrace(const char *vcdname) {
+		// {{{
 		if (!m_trace) {
 			m_trace = new VerilatedVcdC;
 			m_core->trace(m_trace, 99);
 			m_trace->open(vcdname);
 		}
+		// }}}
 	}
 
 	virtual	void	closetrace(void) {
+		// {{{
 		if (m_trace) {
 			m_trace->close();
 			delete m_trace;
 			m_trace = NULL;
 		}
+		// }}}
 	}
 
 	virtual	void	eval(void) {
@@ -84,6 +92,7 @@ public:
 	}
 
 	virtual	void	tick(void) {
+		// {{{
 		m_tickcount++;
 
 		// Make sure we have our evaluations straight before the top
@@ -102,13 +111,16 @@ public:
 			m_trace->dump(10*m_tickcount+5);
 			m_trace->flush();
 		}
+		// }}}
 	}
 
 	virtual	void	reset(void) {
+		// {{{
 		m_core->i_reset = 1;
 		tick();
 		m_core->i_reset = 0;
 		// printf("RESET\n");
+		// }}}
 	}
 
 	unsigned long	tickcount(void) {

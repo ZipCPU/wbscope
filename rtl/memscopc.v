@@ -32,7 +32,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2020, Gisselquist Technology, LLC
+// Copyright (C) 2020-2021, Gisselquist Technology, LLC
 // {{{
 //
 // This program is free software (firmware): you can redistribute it and/or
@@ -99,9 +99,9 @@ module	memscopc #(
 		// is fixed at a width of 32-bits by Xilinx def'n, and 2) since
 		// we only ever have 4 configuration words.
 		localparam	C_AXIL_ADDR_WIDTH = 4,
-		localparam	C_AXIL_DATA_WIDTH = 32,
-		localparam	AXILLSB = $clog2(C_AXIL_DATA_WIDTH)-3,
-		localparam	ADDRLSB = $clog2(C_AXI_DATA_WIDTH)-3
+		localparam	C_AXIL_DATA_WIDTH = 32
+		// localparam	AXILLSB = $clog2(C_AXIL_DATA_WIDTH)-3,
+		// localparam	ADDRLSB = $clog2(C_AXI_DATA_WIDTH)-3
 		// }}}
 	) (
 		// {{{
@@ -223,7 +223,7 @@ module	memscopc #(
 
 	axisrle #(
 		// {{{
-		.C_AXI_DATA_WIDTH(C_AXI_DATA_WIDTH)
+		.C_AXIS_DATA_WIDTH(C_AXI_DATA_WIDTH)
 		// }}}
 	) encoder (
 		// {{{

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	avscope.v
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	This is a generic/library routine for providing a bus accessed
@@ -61,11 +61,11 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
-// modify it under the terms of  the GNU General Public License as published
+// modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
 // your option) any later version.
 //
@@ -78,10 +78,10 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -89,81 +89,138 @@
 `ifdef	VERILATOR
 `default_nettype	none
 `endif
-//
-module avscope(i_data_clk, i_ce, i_trigger, i_data,
-	i_av_clk, i_av_reset, i_av_read, i_av_write, i_av_addr, i_av_writedata,
-	o_av_readresponse, o_av_writeresponse, o_av_response, o_av_readdata,
-	o_irq);
-	parameter [4:0]			LGMEM = 5'd10;
-	parameter			BUSW = 32;
-	parameter [0:0]			SYNCHRONOUS=1;
-	parameter		 	HOLDOFFBITS = 20;
-	parameter [(HOLDOFFBITS-1):0]	DEFAULT_HOLDOFF = ((1<<(LGMEM-1))-4);
-	// The input signals that we wish to record
-	input	wire			i_data_clk, i_ce, i_trigger;
-	input	wire	[(BUSW-1):0]	i_data;
-	// The WISHBONE bus for reading and configuring this scope
-	input	wire			i_av_clk, i_av_reset, i_av_read, i_av_write;
-	input	wire			i_av_addr; // One address line only
-	input	wire	[(BUSW-1):0]	i_av_writedata;
-	output	wire	[(BUSW-1):0]	o_av_readdata;
-	// output	wire			o_av_waitrequest;
-	//
-	output	wire			o_av_readresponse;
-	output	wire			o_av_writeresponse;
-	output	wire	[1:0]		o_av_response;
-	// And, finally, for a final flair --- offer to interrupt the CPU after
-	// our trigger has gone off.  This line is equivalent to the scope 
-	// being stopped.  It is not maskable here.
-	output	wire			o_irq;
+// }}}
+module avscope #(
+		// {{{
+		parameter [4:0]			LGMEM = 5'd10,
+		parameter			BUSW = 32,
+		parameter [0:0]			SYNCHRONOUS=1,
+		parameter		 	HOLDOFFBITS = 20,
+		parameter [(HOLDOFFBITS-1):0]	DEFAULT_HOLDOFF = ((1<<(LGMEM-1))-4)
+		// }}}
+	) (
+		// {{{
+		// The input signals that we wish to record
+		input	wire			i_data_clk, i_ce, i_trigger,
+		input	wire	[(BUSW-1):0]	i_data,
+		// The Avalon bus for reading and configuring this scope
+		// {{{
+		input	wire			i_av_clk, i_av_reset,
+						i_av_read, i_av_write,
+		// One address line only
+		input	wire			i_av_addr,
+		input	wire	[(BUSW-1):0]	i_av_writedata,
+		// output	wire			o_av_waitrequest,
+		//
+		output	wire			o_av_readresponse,
+		output	wire			o_av_writeresponse,
+		output	wire	[1:0]		o_av_response,
+		output	wire	[(BUSW-1):0]	o_av_readdata,
+		// }}}
+		// And, finally, for a final flair --- offer to interrupt the
+		// CPU after our trigger has gone off.  This line is equivalent
+		// to the scope  being stopped.  It is not maskable here.
+		output	wire			o_irq
+		// }}}
+	);
+
+	// Signal declarations
+	// {{{
+	reg			read_address;
+	wire			read_from_data, write_stb, write_to_control;
+	reg	[(LGMEM-1):0]	raddr;
+	reg	[(BUSW-1):0]	mem[0:((1<<LGMEM)-1)];
+	wire			bw_reset_request, bw_manual_trigger,
+				bw_disable_trigger, bw_reset_complete;
+	reg	[2:0]		br_config;
+	reg [(HOLDOFFBITS-1):0]	br_holdoff;
+
+	reg			dr_triggered, dr_primed;
+	wire			dw_trigger;
+	wire			bus_clock;
+
+	reg [(HOLDOFFBITS-1):0]	counter;
+	reg			dr_stopped;
+	reg	[(LGMEM-1):0]	waddr;
+	localparam	STOPDELAY = 1;
+	wire	[(BUSW-1):0]		wr_piped_data;
+	wire	bw_stopped, bw_triggered, bw_primed;
+	reg	br_av_rdack, br_pre_av_rdack;
+	reg	br_av_wrack, br_pre_av_wrack;
+	reg	[(LGMEM-1):0]	this_addr;
+	reg	[31:0]	nxt_mem;
+	wire	[19:0]	full_holdoff;
+	wire	[31:0]	i_bus_data;
+	reg	[31:0]	o_bus_data;
+	wire	[4:0]	bw_lgmem;
+	reg	br_level_interrupt;
+	// }}}
 
 	assign	o_av_response = 2'b00;
 
-	wire	bus_clock;
 	assign	bus_clock = i_av_clk;
 
-	///////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////
 	//
-	// Decode and handle the WB bus signaling in a
-	// (somewhat) portable manner
-	//
-	///////////////////////////////////////////////////
+	// Decode and handle the bus signaling in a (somewhat) portable manner
+	// {{{
+	////////////////////////////////////////////////////////////////////////
 	//
 	//
 	// assign	o_av_waitrequest = 1'b0;
 
-	wire	read_from_data;
+
 	assign	read_from_data = (i_av_read)&&(i_av_addr);
-
-	wire	write_stb;
 	assign	write_stb = (i_av_write);
-
-	wire	write_to_control;
 	assign	write_to_control = (i_av_write)&&(!i_av_addr);
+	assign	i_bus_data = i_av_writedata;
 
-	reg	read_address;
 	always @(posedge bus_clock)
 		read_address <= i_av_addr;
-
-	reg	[(LGMEM-1):0]	raddr;
-	reg	[(BUSW-1):0]	mem[0:((1<<LGMEM)-1)];
-
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
 	// Our status/config register
-	wire		bw_reset_request, bw_manual_trigger,
-			bw_disable_trigger, bw_reset_complete;
-	reg	[2:0]	br_config;
-	reg	[(HOLDOFFBITS-1):0]	br_holdoff;
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Now that we've finished reading/writing from the
+	// bus, ... or at least acknowledging reads and
+	// writes from and to the bus--even if they haven't
+	// happened yet, now we implement our actual scope.
+	// This includes implementing the actual reads/writes
+	// from/to the bus.
+	//
+	// From here on down, is the heart of the scope itself.
+	//
 	initial	br_config = 3'b0;
 	initial	br_holdoff = DEFAULT_HOLDOFF;
 	always @(posedge bus_clock)
+	begin
 		if (write_to_control)
 		begin
-			br_config <= { i_av_writedata[31],
-				i_av_writedata[27],
-				i_av_writedata[26] };
-			br_holdoff <= i_av_writedata[(HOLDOFFBITS-1):0];
+			br_config[1:0] <= {
+				i_bus_data[27],
+				i_bus_data[26] };
+			if (!i_bus_data[31])
+				br_holdoff <= i_bus_data[(HOLDOFFBITS-1):0];
+
+			//
+			// Reset logic
+			if (bw_reset_complete)
+				// Clear the reset request, regardless of the write
+				br_config[2] <= 1'b1;
+			else if (!br_config[2])
+				br_config[2] <= 1'b0;
+			else
+				br_config[2] <= i_bus_data[31];
 		end else if (bw_reset_complete)
 			br_config[2] <= 1'b1;
+
+		if (i_av_reset)
+			br_config[2] <= 1'b0;
+	end
+
 	assign	bw_reset_request   = (!br_config[2]);
 	assign	bw_manual_trigger  = (br_config[1]);
 	assign	bw_disable_trigger = (br_config[0]);
@@ -178,12 +235,11 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 		assign	bw_reset_complete = bw_reset_request;
 	end else begin
 		reg		r_reset_complete;
-		reg	[2:0]	q_iflags;
-		reg	[2:0]	r_iflags;
+		reg	[2:0]	q_iflags, r_iflags;
 
 		// Resets are synchronous to the bus clock, not the data clock
 		// so do a clock transfer here
-		initial	q_iflags = 3'b000;
+		initial	{ q_iflags, r_iflags } = 6'h0;
 		initial	r_reset_complete = 1'b0;
 		always @(posedge i_data_clk)
 		begin
@@ -196,8 +252,8 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 		assign	dw_manual_trigger = r_iflags[1];
 		assign	dw_disable_trigger = r_iflags[0];
 
-		reg	q_reset_complete;
-		reg	qq_reset_complete;
+		reg	q_reset_complete,
+			qq_reset_complete;
 		// Pass an acknowledgement back from the data clock to the bus
 		// clock that the reset has been accomplished
 		initial	q_reset_complete = 1'b0;
@@ -210,49 +266,63 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 
 		assign bw_reset_complete = qq_reset_complete;
 	end endgenerate
-
+	// }}}
+	////////////////////////////////////////////////////////////////////////
 	//
 	// Set up the trigger
+	// {{{
+	////////////////////////////////////////////////////////////////////////
 	//
 	//
-	// Write with the i-clk, or input clock.  All outputs read with the
+
+	// dw_trigger -- trigger wire, defined on the data clock
+	// {{{
+	// Write with the i_clk, or input clock.  All outputs read with the
 	// bus clock, or bus_clock  as we've called it here.
-	reg	dr_triggered, dr_primed;
-	wire	dw_trigger;
 	assign	dw_trigger = (dr_primed)&&(
 				((i_trigger)&&(!dw_disable_trigger))
 				||(dw_manual_trigger));
+	// }}}
+
+	// dr_triggered
+	// {{{
 	initial	dr_triggered = 1'b0;
 	always @(posedge i_data_clk)
-		if (dw_reset)
-			dr_triggered <= 1'b0;
-		else if ((i_ce)&&(dw_trigger))
-			dr_triggered <= 1'b1;
+	if (dw_reset)
+		dr_triggered <= 1'b0;
+	else if ((i_ce)&&(dw_trigger))
+		dr_triggered <= 1'b1;
+	// }}}
 
 	//
 	// Determine when memory is full and capture is complete
 	//
 	// Writes take place on the data clock
 	// The counter is unsigned
-	reg	[(HOLDOFFBITS-1):0]	counter;
-
-	reg		dr_stopped;
 	initial	dr_stopped = 1'b0;
 	initial	counter = 0;
 	always @(posedge i_data_clk)
-		if (dw_reset)
-			counter <= 0;
-		else if ((i_ce)&&(dr_triggered)&&(!dr_stopped))
-		begin
-			counter <= counter + 1'b1;
-		end
+	if (dw_reset)
+		counter <= 0;
+	else if ((i_ce)&&(dr_triggered)&&(!dr_stopped))
+		counter <= counter + 1'b1;
+
 	always @(posedge i_data_clk)
-		if ((!dr_triggered)||(dw_reset))
-			dr_stopped <= 1'b0;
-		else if (HOLDOFFBITS > 1) // if (i_ce)
-			dr_stopped <= (counter >= br_holdoff);
-		else if (HOLDOFFBITS <= 1)
-			dr_stopped <= ((i_ce)&&(dw_trigger));
+	if ((!dr_triggered)||(dw_reset))
+		dr_stopped <= 1'b0;
+	else if (HOLDOFFBITS > 1) // if (i_ce)
+		dr_stopped <= (counter >= br_holdoff);
+	else if (HOLDOFFBITS <= 1)
+		dr_stopped <= ((i_ce)&&(dw_trigger));
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Write to memory
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
+
 
 	//
 	//	Actually do our writes to memory.  Record, via 'primed' when
@@ -264,28 +334,31 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 	//	The clock transfer on the stopped line handles the clock
 	//	transfer for these signals.
 	//
-	reg	[(LGMEM-1):0]	waddr;
+
+	// waddr, dr_primed
+	// {{{
 	initial	waddr = {(LGMEM){1'b0}};
 	initial	dr_primed = 1'b0;
 	always @(posedge i_data_clk)
-		if (dw_reset) // For simulation purposes, supply a valid value
-		begin
-			waddr <= 0; // upon reset.
-			dr_primed <= 1'b0;
-		end else if ((i_ce)&&(!dr_stopped))
-		begin
-			// mem[waddr] <= i_data;
-			waddr <= waddr + {{(LGMEM-1){1'b0}},1'b1};
-			if (!dr_primed)
-				dr_primed <= (&waddr);
-		end
+	if (dw_reset) // For simulation purposes, supply a valid value
+	begin
+		waddr <= 0; // upon reset.
+		dr_primed <= 1'b0;
+	end else if (i_ce && !dr_stopped)
+	begin
+		// mem[waddr] <= i_data;
+		waddr <= waddr + {{(LGMEM-1){1'b0}},1'b1};
+		if (!dr_primed)
+			dr_primed <= (&waddr);
+	end
+	// }}}
 
+	// wr_piped_data -- delay data to match the trigger
+	// {{{
 	// Delay the incoming data so that we can get our trigger
 	// logic to line up with the data.  The goal is to have a
 	// hold off of zero place the trigger in the last memory
 	// address.
-	localparam	STOPDELAY = 1;
-	wire	[(BUSW-1):0]		wr_piped_data;
 	generate
 	if (STOPDELAY == 0)
 		// No delay ... just assign the wires to our input lines
@@ -296,27 +369,36 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 		// Delay by one means just register this once
 		reg	[(BUSW-1):0]	data_pipe;
 		always @(posedge i_data_clk)
-			if (i_ce)
-				data_pipe <= i_data;
+		if (i_ce)
+			data_pipe <= i_data;
+
 		assign	wr_piped_data = data_pipe;
 	end else begin
 		// Arbitrary delay ... use a longer pipe
 		reg	[(STOPDELAY*BUSW-1):0]	data_pipe;
 
 		always @(posedge i_data_clk)
-			if (i_ce)
-				data_pipe <= { data_pipe[((STOPDELAY-1)*BUSW-1):0], i_data };
+		if (i_ce)
+			data_pipe <= { data_pipe[((STOPDELAY-1)*BUSW-1):0], i_data };
 		assign	wr_piped_data = { data_pipe[(STOPDELAY*BUSW-1):((STOPDELAY-1)*BUSW)] };
 	end endgenerate
+	// }}}
 
+	// mem[] <= wr_piped_data
+	// {{{
 	always @(posedge i_data_clk)
-		if ((i_ce)&&(!dr_stopped))
-			mem[waddr] <= wr_piped_data;
+	if ((i_ce)&&(!dr_stopped))
+		mem[waddr] <= wr_piped_data;
+	// }}}
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Move the status signals back to the bus clock
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 
-	//
-	// Clock transfer of the status signals
-	//
-	wire	bw_stopped, bw_triggered, bw_primed;
 	generate
 	if (SYNCHRONOUS > 0)
 	begin
@@ -347,10 +429,15 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 		assign	bw_triggered = r_oflags[1];
 		assign	bw_primed    = r_oflags[0];
 	end endgenerate
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Read from the memory, using the bus clock.  Otherwise respond to bus
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 
-	// Reads use the bus clock
-	reg	br_av_rdack, br_pre_av_rdack;
-	reg	br_av_wrack, br_pre_av_wrack;
 	initial	br_pre_av_rdack = 1'b0;
 	initial	br_pre_av_wrack = 1'b0;
 	initial	br_av_rdack = 1'b0;
@@ -367,61 +454,79 @@ module avscope(i_data_clk, i_ce, i_trigger, i_data,
 		//
 		br_pre_av_wrack <= i_av_write;
 		br_av_wrack <= (br_pre_av_wrack);
+
+		if (i_av_reset)
+		begin
+			// {{{
+			br_pre_av_rdack <= 1'b0;
+			br_av_rdack <= 1'b0;
+
+			br_pre_av_wrack <= 1'b0;
+			br_av_wrack <= 1'b0;
+			// }}}
+		end
 	end
+
 	assign	o_av_writeresponse = (br_av_wrack);
 	assign	o_av_readresponse  = (br_av_rdack);
 
-	reg	[(LGMEM-1):0]	this_addr;
 	always @(posedge bus_clock)
-		if (read_from_data)
-			this_addr <= raddr + waddr + 1'b1;
-		else
-			this_addr <= raddr + waddr;
+	if (read_from_data)
+		this_addr <= raddr + waddr + 1'b1;
+	else
+		this_addr <= raddr + waddr;
 
-	reg	[31:0]	nxt_mem;
 	always @(posedge bus_clock)
 		nxt_mem <= mem[this_addr];
 
-	wire	[19:0]	full_holdoff;
 	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;
 	generate if (HOLDOFFBITS < 20)
 		assign full_holdoff[19:(HOLDOFFBITS)] = 0;
 	endgenerate
 
-	reg	[31:0]	o_bus_data;
-	wire	[4:0]	bw_lgmem;
 	assign		bw_lgmem = LGMEM;
 	always @(posedge bus_clock)
-		if (!read_address) // Control register read
-			o_bus_data <= { bw_reset_request,
-					bw_stopped,
-					bw_triggered,
-					bw_primed,
-					bw_manual_trigger,
-					bw_disable_trigger,
-					(raddr == {(LGMEM){1'b0}}),
-					bw_lgmem,
-					full_holdoff  };
-		else if (!bw_stopped) // read, prior to stopping
-			o_bus_data <= i_data;
-		else // if (i_wb_addr) // Read from FIFO memory
-			o_bus_data <= nxt_mem; // mem[raddr+waddr];
+	if (!read_address) // Control register read
+		o_bus_data <= { bw_reset_request,
+				bw_stopped,
+				bw_triggered,
+				bw_primed,
+				bw_manual_trigger,
+				bw_disable_trigger,
+				(raddr == {(LGMEM){1'b0}}),
+				bw_lgmem,
+				full_holdoff  };
+	else if (!bw_stopped) // read, prior to stopping
+		o_bus_data <= i_data;
+	else // if (i_wb_addr) // Read from FIFO memory
+		o_bus_data <= nxt_mem; // mem[raddr+waddr];
 
 	assign	o_av_readdata = o_bus_data;
-
-	reg	br_level_interrupt;
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Interrupt generation
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 	initial	br_level_interrupt = 1'b0;
 	assign	o_irq = (bw_stopped)&&(!bw_disable_trigger)
 					&&(!br_level_interrupt);
-	always @(posedge bus_clock)
-		if ((bw_reset_complete)||(bw_reset_request))
-			br_level_interrupt<= 1'b0;
-		else
-			br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
 
-	// verilator lint_off UNUSED
+	always @(posedge bus_clock)
+	if (i_av_reset || (bw_reset_complete)||(bw_reset_request))
+		br_level_interrupt<= 1'b0;
+	else
+		br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
+	// }}}
+
 	// Make verilator happy
-	wire	[28:0]	unused;
-	assign unused = { i_av_writedata[30:28], i_av_writedata[25:0] };
+	// {{{
+	// verilator lint_off UNUSED
+	wire	unused;
+	assign unused = &{ 1'b0, i_bus_data[30:28], i_bus_data[25:0],
+			write_stb };
 	// verilator lint_on UNUSED
+	// }}}
 endmodule

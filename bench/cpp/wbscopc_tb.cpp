@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename:	wbscopc_tb.cpp
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	A quick test bench to determine if the run-length encoded
@@ -11,9 +11,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of  the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -28,14 +28,14 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
 #include <stdio.h>
 
 #include <verilated.h>
@@ -51,7 +51,7 @@ const int LGMEMSIZE = 15;
 class	WBSCOPC_TB : public WB_TB<Vwbscopc_tb> {
 	bool		m_debug;
 public:
-
+	// {{{
 	WBSCOPC_TB(void) {
 		m_debug = true;
 	}
@@ -82,6 +82,7 @@ public:
 
 	bool	debug(void) const { return m_debug; }
 	bool	debug(bool nxtv) { return m_debug = nxtv; }
+	// }}}
 };
 
 int main(int  argc, char **argv) {
@@ -141,7 +142,7 @@ int main(int  argc, char **argv) {
 	while((v & WBSCOPE_STOPPED)==0)
 		v = tb->readio(WBSCOPE_STATUS);
 	printf("SCOPE has stopped, reading data\n");
-
+	// {{{
 	tb->readz(WBSCOPE_DATA, (1<<ln), buf);
 	addr = 0;
 	trigger_addr = 0xffffffff;
@@ -161,7 +162,10 @@ int main(int  argc, char **argv) {
 		}
 	} if ((buf[(1<<ln)-1]&0x80000000))
 		printf("     [*****]:\n");
+	// }}}
 
+	// Error checking
+	// {{{
 	if (buf[(1<<ln)-1] & 0x80000000) {
 		printf("ERR: LAST VALUE IS A RUN, 0x%08x\n", buf[(1<<ln)-1]);
 		goto test_failure;
@@ -171,8 +175,10 @@ int main(int  argc, char **argv) {
 		printf("ERR: TRIGGER NOT FOUND IN THE DATA!\n");
 		goto test_failure;
 	}
+	// }}}
 
-	
+	// Trigger check
+	// {{{
 	printf("TRIGGER ADDRESS = %08x (%5d)\n", trigger_addr, trigger_addr);
 	printf("V               = %08x\n", v & 0x0fffff);
 	printf("Difference      = %08x (%5d)\n", addr - trigger_addr,
@@ -181,6 +187,7 @@ int main(int  argc, char **argv) {
 		printf("TRIGGER AT THE WRONG LOCATION!\n");
 		goto test_failure;
 	}
+	// }}}
 
 	printf("SUCCESS!!\n");
 	delete tb;

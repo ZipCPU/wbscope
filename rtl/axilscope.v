@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	axilscope.v
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	This is a generic/library routine for providing a bus accessed
@@ -67,11 +67,11 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
-// modify it under the terms of  the GNU General Public License as published
+// modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
 // your option) any later version.
 //
@@ -84,44 +84,39 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
 //
 `default_nettype	none
-//
-module axilscope
-	#(
-		// Users to add parameters here
+// }}}
+module axilscope #(
+		// {{{
 		parameter [4:0]	LGMEM = 5'd10,
 		parameter	SYNCHRONOUS=1,
 		parameter	HOLDOFFBITS = 20,
 		parameter [(HOLDOFFBITS-1):0]	DEFAULT_HOLDOFF
 						= ((1<<(LGMEM-1))-4),
 		localparam	BUSW = 32,
-		// User parameters ends
-		// DO NOT EDIT BELOW THIS LINE ---------------------
-		// Do not modify the parameters beyond this line
+		//
 		// Width of S_AXI data bus
 		localparam integer C_S_AXI_DATA_WIDTH	= 32,
 		// Width of S_AXI address bus
 		parameter integer C_S_AXI_ADDR_WIDTH	= 3,
 		localparam	ADDR_LSBS = $clog2(C_S_AXI_DATA_WIDTH)-3
-	)
-	(
-		// Users to add ports here
+		// }}}
+	) (
+		// {{{
 		input wire	i_data_clk, // The data clock, can be set to ACLK
 		input wire	i_ce,	// = '1' when recordable data is present
 		input wire	i_trigger,// = '1' when interesting event hapns
 		input wire	[31:0]	i_data,
 		output	wire	o_interrupt,	// ='1' when scope has stopped
-		// User ports ends
-		// DO NOT EDIT BELOW THIS LINE ---------------------
-		// Do not modify the ports beyond this line
+		//
 		// Global Clock Signal
 		input wire  S_AXI_ACLK,
 		// Global Reset Signal. This Signal is Active LOW
@@ -182,9 +177,11 @@ module axilscope
 		// Read ready. This signal indicates that the master can
     		// accept the read data and response information.
 		input wire  S_AXI_RREADY
-		// DO NOT EDIT ABOVE THIS LINE ---------------------
+		// }}}
 	);
 
+	// Signal declarations
+	// {{{
 	// AXI4LITE signals
 	reg [C_S_AXI_ADDR_WIDTH-1 : 0] 	axi_awaddr;
 	reg			 	axi_awready;
@@ -196,27 +193,61 @@ module axilscope
 	reg 			 	axi_arready;
 	// reg		 [1 : 0] 	axi_rresp;
 
+	// Pseudo bus signals
+	wire			bus_clock;
+	wire			read_from_data;
+	wire			write_stb;
+	wire			write_to_control;
+	reg	[1:0]	read_address;
+	// reg			read_address;
+	wire	[31:0]		i_bus_data;
+	reg	[31:0]		o_bus_data;
 
-	wire	write_stb;
+	//
+	reg	[(LGMEM-1):0]	raddr, waddr;
+	reg	[(BUSW-1):0]	mem[0:((1<<LGMEM)-1)];
+
+	wire			bw_reset_request, bw_manual_trigger,
+				bw_disable_trigger, bw_reset_complete;
+	reg	[2:0]		br_config;
+	reg [(HOLDOFFBITS-1):0]	br_holdoff;
+	wire			dw_reset, dw_manual_trigger, dw_disable_trigger;
+	reg			dr_triggered, dr_primed;
+	wire			dw_trigger;
+	reg			dr_stopped;
+
+	(* ASYNC_REG="TRUE" *) reg	[(HOLDOFFBITS-1):0]	counter;
+
+	localparam	STOPDELAY = 1;	// Calibrated value--don't change this
+	wire	[(BUSW-1):0]	wr_piped_data;
+	wire			bw_stopped, bw_triggered, bw_primed;
+	reg	[(LGMEM-1):0]	this_addr;
+	reg	[31:0]		nxt_mem;
+	wire	[19:0]		full_holdoff;
+	wire	[4:0]		bw_lgmem;
+	reg			br_level_interrupt;
 `ifdef	FORMAL
 	(* gclk *) reg	gbl_clk;
 	reg	f_past_valid_bus, f_past_valid_gbl, f_past_valid_data;
 `endif	// FORMAL
-
-	///////////////////////////////////////////////////
-	//
-	// Decode and handle the AXI/Bus signaling
-	//
-	///////////////////////////////////////////////////
-	//
-	//
-	//
-	wire	i_reset;
-	assign	i_reset = !S_AXI_ARESETN;
-
+	wire		i_reset;
 	reg		valid_write_data, valid_write_address,
 			write_response_stall;
 	reg	[1:0]	rvalid;
+
+	wire	[31:0]	i_bus_data;
+	reg		read_from_data;
+	// }}}
+
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Decode and handle the bus signaling in a (somewhat) portable manner
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
+	//
+	assign	i_reset = !S_AXI_ARESETN;
 
 	always @(*)
 	begin
@@ -327,12 +358,6 @@ module axilscope
 	// From here on down, Gisselquist Technology, LLC,
 	// claims a copyright on the code.
 	//
-	wire		bus_clock;
-	wire		write_to_control;
-	reg	[1:0]	read_address;
-	wire	[31:0]	i_bus_data;
-	reg		read_from_data;
-
 	assign	bus_clock = S_AXI_ACLK;
 
 	assign	write_to_control = (write_stb)
@@ -366,15 +391,15 @@ module axilscope
 
 	assign	i_bus_data = (S_AXI_WREADY ? S_AXI_WDATA : axi_wdata);
 
-
-	///////////////////////////////////////////////////
+	// }}}
+	////////////////////////////////////////////////////////////////////////
 	//
-	// The actual SCOPE
-	//
-	///////////////////////////////////////////////////
+	// Our status/config register
+	// {{{
+	////////////////////////////////////////////////////////////////////////
 	//
 	// Now that we've finished reading/writing from the
-	// bus, ... or at least acknowledging reads and 
+	// bus, ... or at least acknowledging reads and
 	// writes from and to the bus--even if they haven't
 	// happened yet, now we implement our actual scope.
 	// This includes implementing the actual reads/writes
@@ -382,28 +407,6 @@ module axilscope
 	//
 	// From here on down, is the heart of the scope itself.
 	//
-	reg	[(LGMEM-1):0]	raddr;
-	reg	[(BUSW-1):0]	mem[0:((1<<LGMEM)-1)];
-
-	// Our status/config register
-	wire		bw_reset_request, bw_manual_trigger,
-			bw_disable_trigger, bw_reset_complete;
-	reg	[2:0]	br_config;
-	reg	[(HOLDOFFBITS-1):0]	br_holdoff;
-
-	//
-	wire			dw_reset, dw_manual_trigger, dw_disable_trigger;
-	reg			dr_triggered, dr_primed;
-	wire			dw_trigger;
-	reg			dr_stopped;
-	reg	[(LGMEM-1):0]	waddr;
-	wire	[(BUSW-1):0]	wr_piped_data;
-	wire			bw_stopped, bw_triggered, bw_primed;
-	reg	[(LGMEM-1):0]	this_addr;
-	reg	[31:0]		nxt_mem;
-	wire	[19:0]		full_holdoff;
-	reg	[31:0]		o_bus_data;
-	wire	[4:0]		bw_lgmem;
 	initial	br_config = 3'b0;
 	initial	br_holdoff = DEFAULT_HOLDOFF;
 	always @(posedge bus_clock)
@@ -425,12 +428,14 @@ module axilscope
 		else if (!br_config[2])
 			// Reset request is already pending--don't change it
 			br_config[2] <= 1'b0;
-		else if (i_reset
-			||(write_to_control && !i_bus_data[31]))
+		else if (write_to_control && !i_bus_data[31])
 			// Initiate a new reset request
 			//   Note that we won't initiate a new reset request
 			//   while one is already pending.  Once the pending
 			//   one completes we'll be in the reset state anyway
+			br_config[2] <= 1'b0;
+
+		if (i_reset)
 			br_config[2] <= 1'b0;
 	end
 	assign	bw_reset_request   = (!br_config[2]);
@@ -452,8 +457,12 @@ module axilscope
 		// so do a clock transfer here
 		initial	{ q_iflags, r_iflags } = 6'h0;
 		initial	r_reset_complete = 1'b0;
-		always @(posedge i_data_clk)
+		always @(posedge i_data_clk or posedge i_reset)
+		if (i_reset)
 		begin
+			{ q_iflags, r_iflags } <= 6'h0;
+			r_reset_complete <= 1'b0;
+		end else begin
 			q_iflags <= { bw_reset_request, bw_manual_trigger, bw_disable_trigger };
 			r_iflags <= q_iflags;
 			r_reset_complete <= (dw_reset);
@@ -469,8 +478,12 @@ module axilscope
 		// clock that the reset has been accomplished
 		initial	q_reset_complete = 1'b0;
 		initial	qq_reset_complete = 1'b0;
-		always @(posedge bus_clock)
+		always @(posedge bus_clock or posedge i_reset)
+		if (i_reset)
 		begin
+			q_reset_complete  <= 1'b0;
+			qq_reset_complete <= 1'b0;
+		end else begin
 			q_reset_complete  <= r_reset_complete;
 			qq_reset_complete <= q_reset_complete;
 		end
@@ -501,31 +514,42 @@ module axilscope
 		endcase
 `endif
 	end endgenerate
-
+	// }}}
+	////////////////////////////////////////////////////////////////////////
 	//
 	// Set up the trigger
+	// {{{
+	////////////////////////////////////////////////////////////////////////
 	//
 	//
-	// Write with the i-clk, or input clock.  All outputs read with the
+
+	// dw_trigger -- trigger wire, defined on the data clock
+	// {{{
+	// Write with the i_clk, or input clock.  All outputs read with the
 	// bus clock, or bus_clock  as we've called it here.
 	assign	dw_trigger = (dr_primed)&&(
 				((i_trigger)&&(!dw_disable_trigger))
 				||(dw_manual_trigger));
+	// }}}
+
+	// dr_triggered
+	// {{{
 	initial	dr_triggered = 1'b0;
 	always @(posedge i_data_clk)
 	if (dw_reset)
 		dr_triggered <= 1'b0;
 	else if ((i_ce)&&(dw_trigger))
 		dr_triggered <= 1'b1;
+	// }}}
 
 	//
 	// Determine when memory is full and capture is complete
 	//
 	// Writes take place on the data clock
-	// The counter is unsigned
-	(* ASYNC_REG="TRUE" *) reg	[(HOLDOFFBITS-1):0]	counter;
 
-	initial	dr_stopped = 1'b0;
+	// counter
+	// {{{
+	// The counter is unsigned
 	initial	counter = 0;
 	always @(posedge i_data_clk)
 	if (dw_reset)
@@ -542,6 +566,11 @@ module axilscope
 	if (!dr_triggered)
 		assert(counter == 0);
 `endif
+	// }}}
+
+	// dr_stopped
+	// {{{
+	initial	dr_stopped = 1'b0;
 	always @(posedge i_data_clk)
 	if ((!dr_triggered)||(dw_reset))
 		dr_stopped <= 1'b0;
@@ -552,6 +581,17 @@ module axilscope
 		else if (HOLDOFFBITS <= 1)
 			dr_stopped <= ((i_ce)&&(dw_trigger));
 	end
+	// }}}
+
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Write to memory
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
+
 
 	//
 	//	Actually do our writes to memory.  Record, via 'primed' when
@@ -563,6 +603,9 @@ module axilscope
 	//	The clock transfer on the stopped line handles the clock
 	//	transfer for these signals.
 	//
+
+	// waddr, dr_primed
+	// {{{
 	initial	waddr = {(LGMEM){1'b0}};
 	initial	dr_primed = 1'b0;
 	always @(posedge i_data_clk)
@@ -577,12 +620,14 @@ module axilscope
 		if (!dr_primed)
 			dr_primed <= (&waddr);
 	end
+	// }}}
 
+	// wr_piped_data -- delay data to match the trigger
+	// {{{
 	// Delay the incoming data so that we can get our trigger
 	// logic to line up with the data.  The goal is to have a
 	// hold off of zero place the trigger in the last memory
 	// address.
-	localparam	STOPDELAY = 1;
 	generate
 	if (STOPDELAY == 0)
 		// No delay ... just assign the wires to our input lines
@@ -606,22 +651,28 @@ module axilscope
 			data_pipe <= { data_pipe[((STOPDELAY-1)*BUSW-1):0], i_data };
 		assign	wr_piped_data = { data_pipe[(STOPDELAY*BUSW-1):((STOPDELAY-1)*BUSW)] };
 	end endgenerate
+	// }}}
 
+	// mem[] <= wr_piped_data
+	// {{{
 	always @(posedge i_data_clk)
 	if ((i_ce)&&(!dr_stopped))
 		mem[waddr] <= wr_piped_data;
-
+	// }}}
+	// }}}
+	////////////////////////////////////////////////////////////////////////
 	//
-	// Clock transfer of the status signals
+	// Move the status signals back to the bus clock
+	// {{{
+	////////////////////////////////////////////////////////////////////////
 	//
-
-	generate
-	if (SYNCHRONOUS > 0)
-	begin
+	generate if (SYNCHRONOUS > 0)
+	begin : SYNCHRONOUS_RETURN
 		assign	bw_stopped   = dr_stopped;
 		assign	bw_triggered = dr_triggered;
 		assign	bw_primed    = dr_primed;
-	end else begin
+	end else begin : ASYNC_STATUS
+		// {{{
 		// These aren't a problem, since none of these are strobe
 		// signals.  They goes from low to high, and then stays high
 		// for many clocks.  Swapping is thus easy--two flip flops to
@@ -644,7 +695,7 @@ module axilscope
 		assign	bw_stopped   = r_oflags[2];
 		assign	bw_triggered = r_oflags[1];
 		assign	bw_primed    = r_oflags[0];
-
+		// }}}
 `ifdef	FORMAL
 		always @(*)
 		if (!bw_reset_request)
@@ -667,6 +718,14 @@ module axilscope
 		
 `endif
 	end endgenerate
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Read from the memory, using the bus clock.  Otherwise respond to bus
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 
 	// Reads use the bus clock
 	initial	raddr = 0;
@@ -688,12 +747,18 @@ module axilscope
 	if (read_from_data)
 		nxt_mem <= mem[this_addr];
 
+	// holdoff sub-register
+	// {{{
 	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;
 	generate if (HOLDOFFBITS < 20)
 		assign full_holdoff[19:(HOLDOFFBITS)] = 0;
 	endgenerate
+	// }}}
 
 	assign		bw_lgmem = LGMEM;
+
+	// Bus read
+	// {{{
 	always @(posedge bus_clock)
 	if (rvalid[0] && (!S_AXI_RVALID || S_AXI_RREADY))
 	begin
@@ -718,16 +783,24 @@ module axilscope
 	end
 
 	assign	S_AXI_RDATA = o_bus_data;
-
-	reg	br_level_interrupt;
+	// }}}
+	////////////////////////////////////////////////////////////////////////
+	//
+	// Interrupt generation
+	// {{{
+	////////////////////////////////////////////////////////////////////////
+	//
+	//
 	initial	br_level_interrupt = 1'b0;
-	assign	o_interrupt = (bw_stopped)&&(!bw_disable_trigger)
-					&&(!br_level_interrupt);
 	always @(posedge bus_clock)
 	if ((bw_reset_complete)||(bw_reset_request))
 		br_level_interrupt<= 1'b0;
 	else
 		br_level_interrupt<= (bw_stopped)&&(!bw_disable_trigger);
+
+	assign	o_interrupt = (bw_stopped)&&(!bw_disable_trigger)
+					&&(!br_level_interrupt);
+	// }}}
 
 	// verilator lint_off UNUSED
 	// Make verilator happy
