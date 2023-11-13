@@ -68,7 +68,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// Copyright (C) 2015-2023, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as published
@@ -195,7 +195,7 @@ module axilscope #(
 
 	// Pseudo bus signals
 	wire			bus_clock;
-	wire			read_from_data;
+	reg			read_from_data;
 	wire			write_stb;
 	wire			write_to_control;
 	reg	[1:0]	read_address;
@@ -234,9 +234,6 @@ module axilscope #(
 	reg		valid_write_data, valid_write_address,
 			write_response_stall;
 	reg	[1:0]	rvalid;
-
-	wire	[31:0]	i_bus_data;
-	reg		read_from_data;
 	// }}}
 
 	////////////////////////////////////////////////////////////////////////
@@ -444,12 +441,12 @@ module axilscope #(
 
 	generate
 	if (SYNCHRONOUS > 0)
-	begin
+	begin : GEN_SYNCHRONOUS
 		assign	dw_reset = bw_reset_request;
 		assign	dw_manual_trigger = bw_manual_trigger;
 		assign	dw_disable_trigger = bw_disable_trigger;
 		assign	bw_reset_complete = bw_reset_request;
-	end else begin
+	end else begin : GEN_ASYNC
 		reg		r_reset_complete;
 		(* ASYNC_REG = "TRUE" *) reg	[2:0]	q_iflags, r_iflags;
 
@@ -630,10 +627,11 @@ module axilscope #(
 	// address.
 	generate
 	if (STOPDELAY == 0)
+	begin : NO_STOPDLY
 		// No delay ... just assign the wires to our input lines
 		assign	wr_piped_data = i_data;
-	else if (STOPDELAY == 1)
-	begin
+	end else if (STOPDELAY == 1)
+	begin : GEN_ONE_STOPDLY
 		//
 		// Delay by one means just register this once
 		reg	[(BUSW-1):0]	data_pipe;
@@ -642,7 +640,7 @@ module axilscope #(
 			data_pipe <= i_data;
 
 		assign	wr_piped_data = data_pipe;
-	end else begin
+	end else begin : GEN_STOPDELAY
 		// Arbitrary delay ... use a longer pipe
 		reg	[(STOPDELAY*BUSW-1):0]	data_pipe;
 
@@ -751,8 +749,9 @@ module axilscope #(
 	// {{{
 	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;
 	generate if (HOLDOFFBITS < 20)
+	begin : GEN_FULL_HOLDOFF
 		assign full_holdoff[19:(HOLDOFFBITS)] = 0;
-	endgenerate
+	end endgenerate
 	// }}}
 
 	assign		bw_lgmem = LGMEM;
@@ -781,6 +780,7 @@ module axilscope #(
 		else // if (i_wb_addr) // Read from FIFO memory
 			o_bus_data <= nxt_mem; // mem[raddr+waddr];
 	end
+	// }}}
 
 	assign	S_AXI_RDATA = o_bus_data;
 	// }}}
@@ -802,6 +802,8 @@ module axilscope #(
 					&&(!br_level_interrupt);
 	// }}}
 
+	// Make verilator happy
+	// {{{
 	// verilator lint_off UNUSED
 	// Make verilator happy
 	wire		unused;
@@ -809,6 +811,7 @@ module axilscope #(
 		axi_awaddr[ADDR_LSBS-1:0],
 		i_bus_data[30:28], i_bus_data[25:0] };
 	// verilator lint_on UNUSED
+	// }}}
 `ifdef	FORMAL
 	generate if (SYNCHRONOUS)
 	begin
@@ -940,7 +943,7 @@ module axilscope #(
 				f_axi_awr_outstanding;
 
 	faxil_slave #(
-		// .C_S_AXI_DATA_WIDth(C_S_AXI_DATA_WIDTH),
+		// .C_S_AXI_DATA_WIDTH(C_S_AXI_DATA_WIDTH),
 		// Width of S_AXI address bus
 		.C_AXI_ADDR_WIDTH(C_S_AXI_ADDR_WIDTH),
 		.F_LGDEPTH(F_LGDEPTH),
@@ -952,31 +955,29 @@ module axilscope #(
 			.i_clk(S_AXI_ACLK),
 			.i_axi_reset_n(S_AXI_ARESETN),
 			//
-			.i_axi_awaddr(S_AXI_AWADDR),
-			.i_axi_awprot(S_AXI_AWPROT),
-			.i_axi_awcache(4'h0),
 			.i_axi_awvalid(S_AXI_AWVALID),
 			.i_axi_awready(S_AXI_AWREADY),
+			.i_axi_awaddr(S_AXI_AWADDR),
+			.i_axi_awprot(S_AXI_AWPROT),
 			//
 			.i_axi_wdata(S_AXI_WDATA),
 			.i_axi_wstrb(S_AXI_WSTRB),
 			.i_axi_wvalid(S_AXI_WVALID),
 			.i_axi_wready(S_AXI_WREADY),
 			//
-			.i_axi_bresp(S_AXI_BRESP),
 			.i_axi_bvalid(S_AXI_BVALID),
 			.i_axi_bready(S_AXI_BREADY),
+			.i_axi_bresp(S_AXI_BRESP),
 			//
-			.i_axi_araddr(S_AXI_ARADDR),
-			.i_axi_arprot(S_AXI_ARPROT),
 			.i_axi_arvalid(S_AXI_ARVALID),
 			.i_axi_arready(S_AXI_ARREADY),
-			.i_axi_arcache(4'h0),
+			.i_axi_araddr(S_AXI_ARADDR),
+			.i_axi_arprot(S_AXI_ARPROT),
 			//
-			.i_axi_rdata(S_AXI_RDATA),
-			.i_axi_rresp(S_AXI_RRESP),
 			.i_axi_rvalid(S_AXI_RVALID),
 			.i_axi_rready(S_AXI_RREADY),
+			.i_axi_rdata(S_AXI_RDATA),
+			.i_axi_rresp(S_AXI_RRESP),
 			//
 			.f_axi_rd_outstanding(f_axi_rd_outstanding),
 			.f_axi_wr_outstanding(f_axi_wr_outstanding),

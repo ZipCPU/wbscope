@@ -26,7 +26,7 @@
 //	slowly.  They could change so slowly that the standard wishbone scope
 //	doesn't work.  This scope then gives you a working scope, by sampling
 //	at diverse intervals, and only capturing anything that changes within
-//	those intervals.  
+//	those intervals.
 //
 //	Indeed, I'm finding this compressed scope very valuable for evaluating
 //	the timing associated with a GPS PPS and associated NMEA stream.  I
@@ -43,7 +43,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// Copyright (C) 2015-2023, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as published
@@ -65,7 +65,6 @@
 //		http://www.gnu.org/licenses/gpl.html
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
 //
 `default_nettype	none
 // }}}
@@ -93,7 +92,7 @@ module wbscopc #(
 		input	wire	[(BUSW-1):0]	i_wb_data,
 		input	wire	[(BUSW/8-1):0]	i_wb_sel,
 		output	wire			o_wb_stall, o_wb_ack,
-		output	reg	[(BUSW-1):0]	o_wb_data,
+		output	wire	[(BUSW-1):0]	o_wb_data,
 		// }}}
 		// And, finally, for a final flair --- offer to interrupt the
 		// CPU after our trigger has gone off.  This line is equivalent
@@ -166,9 +165,9 @@ module wbscopc #(
 
 	assign	i_bus_data = i_wb_data;
 	assign	o_wb_stall = 1'b0;
-	assign	read_from_data = (i_wb_stb)&&(!i_wb_we)&&(i_wb_addr);
+	assign	read_from_data=i_wb_stb && !i_wb_we && i_wb_addr && (&i_wb_sel);
 	assign	write_stb = (i_wb_stb)&&(i_wb_we);
-	assign	write_to_control = (write_stb)&&(!i_wb_addr);
+	assign	write_to_control = write_stb && !i_wb_addr && (&i_wb_sel);
 
 	always @(posedge bus_clock)
 		read_address <= i_wb_addr;
@@ -600,8 +599,9 @@ module wbscopc #(
 	// {{{
 	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;
 	generate if (HOLDOFFBITS < 20)
+	begin : GEN_FULL_HOLDOFF
 		assign full_holdoff[19:(HOLDOFFBITS)] = 0;
-	endgenerate
+	end endgenerate
 	// }}}
 
 	assign		bw_lgmem = LGMEM;

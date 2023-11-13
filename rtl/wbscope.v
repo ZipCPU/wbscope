@@ -59,7 +59,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 // }}}
-// Copyright (C) 2015-2021, Gisselquist Technology, LLC
+// Copyright (C) 2015-2023, Gisselquist Technology, LLC
 // {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as published
@@ -81,7 +81,6 @@
 //		http://www.gnu.org/licenses/gpl.html
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
 //
 `default_nettype	none
 // }}}
@@ -163,9 +162,9 @@ module wbscope #(
 
 	assign	i_bus_data = i_wb_data;
 	assign	o_wb_stall = 1'b0;
-	assign	read_from_data = (i_wb_stb)&&(!i_wb_we)&&(i_wb_addr);
+	assign	read_from_data = i_wb_stb && !i_wb_we && i_wb_addr && (&i_wb_sel);
 	assign	write_stb = (i_wb_stb)&&(i_wb_we);
-	assign	write_to_control = (write_stb)&&(!i_wb_addr);
+	assign	write_to_control = write_stb && !i_wb_addr && (&i_wb_sel);
 
 	always @(posedge bus_clock)
 		read_address <= i_wb_addr;
@@ -224,12 +223,12 @@ module wbscope #(
 
 	generate
 	if (SYNCHRONOUS > 0)
-	begin
+	begin : GEN_SYNCHRONOUS
 		assign	dw_reset = bw_reset_request;
 		assign	dw_manual_trigger = bw_manual_trigger;
 		assign	dw_disable_trigger = bw_disable_trigger;
 		assign	bw_reset_complete = bw_reset_request;
-	end else begin
+	end else begin : GEN_ASYNC
 		reg		r_reset_complete;
 		(* ASYNC_REG = "TRUE" *) reg	[2:0]	q_iflags;
 		reg	[2:0]	r_iflags;
@@ -403,19 +402,20 @@ module wbscope #(
 	// address.
 	generate
 	if (STOPDELAY == 0)
+	begin : NO_STOPDLY
 		// No delay ... just assign the wires to our input lines
 		assign	wr_piped_data = i_data;
-	else if (STOPDELAY == 1)
-	begin
+	end else if (STOPDELAY == 1)
+	begin : GEN_ONE_STOPDLY
 		//
 		// Delay by one means just register this once
 		reg	[(BUSW-1):0]	data_pipe;
 		always @(posedge i_data_clk)
 		if (i_ce)
 			data_pipe <= i_data;
- 
+
 		assign	wr_piped_data = data_pipe;
-	end else begin
+	end else begin : GEN_STOPDELAY
 		// Arbitrary delay ... use a longer pipe
 		reg	[(STOPDELAY*BUSW-1):0]	data_pipe;
 
@@ -439,7 +439,7 @@ module wbscope #(
 	// {{{
 	////////////////////////////////////////////////////////////////////////
 	//
-	generate if (SYNCHRONOUS > 0)
+	generate if (SYNCHRONOUS)
 	begin : SYNCHRONOUS_RETURN
 		assign	bw_stopped   = dr_stopped;
 		assign	bw_triggered = dr_triggered;
@@ -488,7 +488,7 @@ module wbscope #(
 			else if (q_oflags[2])
 				assert(dr_stopped);
 		end
-		
+
 `endif
 	end endgenerate
 	// }}}
@@ -531,8 +531,9 @@ module wbscope #(
 	// {{{
 	assign full_holdoff[(HOLDOFFBITS-1):0] = br_holdoff;
 	generate if (HOLDOFFBITS < 20)
+	begin : GEN_FULL_HOLDOFF
 		assign full_holdoff[19:(HOLDOFFBITS)] = 0;
-	endgenerate
+	end endgenerate
 	// }}}
 
 	assign		bw_lgmem = LGMEM;

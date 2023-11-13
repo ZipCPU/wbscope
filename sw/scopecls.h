@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Filename: 	scopecls.h
-//
+// {{{
 // Project:	WBScope, a wishbone hosted scope
 //
 // Purpose:	After rebuilding the same code over and over again for every
@@ -16,9 +16,9 @@
 //		Gisselquist Technology, LLC
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Copyright (C) 2015-2020, Gisselquist Technology, LLC
-//
+// }}}
+// Copyright (C) 2015-2023, Gisselquist Technology, LLC
+// {{{
 // This program is free software (firmware): you can redistribute it and/or
 // modify it under the terms of the GNU General Public License as published
 // by the Free Software Foundation, either version 3 of the License, or (at
@@ -33,14 +33,14 @@
 // with this program.  (It's in the $(ROOT)/doc directory.  Run make with no
 // target there if the PDF file isn't present.)  If not, see
 // <http://www.gnu.org/licenses/> for a copy.
-//
+// }}}
 // License:	GPL, v3, as defined and found on www.gnu.org,
+// {{{
 //		http://www.gnu.org/licenses/gpl.html
-//
 //
 ////////////////////////////////////////////////////////////////////////////////
 //
-//
+// }}}
 #ifndef	SCOPECLS_H
 #define	SCOPECLS_H
 
@@ -50,7 +50,7 @@
 
 /*
  * TRACEINFO
- *
+ * {{{
  * The TRACEINFO class describes a wire (or set of wires) internal to the
  * scope data word.  These wires are assumed to be contiguous, and given by:
  * ((data_word>>m_nshift)&((1<<m_nbits)-1).  That is, there are m_nbits bits
@@ -59,7 +59,7 @@
  *
  * Other key pieces include the human readable name given to the signal, m_name,
  * as well as the VCD name, m_key.
- *
+ * }}}
  */
 class	TRACEINFO {
 public:
@@ -70,10 +70,11 @@ public:
 
 /*
  * SCOPE
- *
+ * {{{
  * This class is designed to be a generic SCOPE class, one which has all of the
  * logic other scopes will require.  Hence, if more than one scope needs this
  * logic, I stuff it in here for all scopes to use.
+ * }}}
  */
 class	SCOPE {
 	DEVBUS		*m_fpga;	// Access to the FPGA
