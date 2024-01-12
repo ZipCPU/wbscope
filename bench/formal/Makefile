@@ -1,20 +1,17 @@
 ################################################################################
 ##
-## Filename: 	Makefile
+## Filename: 	bench/formal/Makefile
 ## {{{
 ## Project:	WBScope, a wishbone hosted scope
 ##
-## Purpose:	This is the master Makefile for the project.  It coordinates
-##		the build of a Verilator test, "proving" that this core works
-##	(to the extent that any simulated test "proves" anything).  This
-##	make file depends upon the proper setup of Verilator.
+## Purpose:	
 ##
 ## Creator:	Dan Gisselquist, Ph.D.
 ##		Gisselquist Technology, LLC
 ##
 ################################################################################
 ## }}}
-## Copyright (C) 2015-2024, Gisselquist Technology, LLC
+## Copyright (C) 2021-2024, Gisselquist Technology, LLC
 ## {{{
 ## This program is free software (firmware): you can redistribute it and/or
 ## modify it under the terms of  the GNU General Public License as published
@@ -38,31 +35,38 @@
 ################################################################################
 ##
 ## }}}
-all: rtl bench test
-SUBMAKE := $(MAKE) --no-print-directory -C
+.PHONY: all
+all: axilscope axisrle memscope
+RTL := ../../rtl
 
-.PHONY: doc
-doc:
-	$(SUBMAKE) doc
+.PHONY: axilscope
+axilscope: axilscope_sync/PASS axilscope_async/PASS
+axilscope_sync/PASS: axilscope.sby $(RTL)/axilscope.v faxil_slave.v
+	sby -f axilscope.sby sync
+axilscope_async/PASS: axilscope.sby $(RTL)/axilscope.v faxil_slave.v
+	sby -f axilscope.sby async
 
-.PHONY: rtl
-rtl:
-	$(SUBMAKE) rtl
+.PHONY: axisrle
+axisrle: axisrle_prf/PASS axisrle_prf8/PASS axisrle_prf16/PASS axisrle_cvr/PASS
+axisrle_prf/PASS:   axisrle.sby $(RTL)/skidbuffer.v $(RTL)/axisrle.v
+	sby -f axisrle.sby prf
+axisrle_prf8/PASS:  axisrle.sby $(RTL)/skidbuffer.v $(RTL)/axisrle.v
+	sby -f axisrle.sby prf8
+axisrle_prf16/PASS: axisrle.sby $(RTL)/skidbuffer.v $(RTL)/axisrle.v
+	sby -f axisrle.sby prf16
+axisrle_cvr/PASS:   axisrle.sby $(RTL)/skidbuffer.v $(RTL)/axisrle.v
+	sby -f axisrle.sby cvr
 
-.PHONY: bench
-bench: rtl
-	$(SUBMAKE) bench/rtl
-	$(SUBMAKE) bench/cpp
-
-.PHONY: test
-test: bench
-	$(SUBMAKE) bench/cpp test
+.PHONY: memscope
+memscope: memscope_prf/PASS
+AXI := faxi_master.v faxi_slave.v faxi_addr.v faxi_valaddr.v faxi_wstrb.v
+WB2AXIP := ../../../../wb2axip/gitlab-axi/rtl
+memscope_prf/PASS: memscope.sby $(RTL)/memscope.v $(WB2AXIP)/skidbuffer.v $(WB2AXIP)/sfifo.v $(AXI)
+	sby -f memscope.sby prf
 
 .PHONY: clean
 clean:
-	$(SUBMAKE) rtl        clean
-	$(SUBMAKE) bench/rtl  clean
-	$(SUBMAKE) bench/cpp  clean
-	$(SUBMAKE) doc        clean
-
+	rm -rf axilscope_*/
+	rm -rf axisrle_*/
+	rm -rf memscope_*/
 
